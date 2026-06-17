@@ -46,3 +46,22 @@ def test_forward_losses_finite():
     for k in ("pred_loss", "sigreg_loss", "loss"):
         assert torch.isfinite(out[k]).all()
     assert out["loss"].requires_grad
+
+
+def test_window_dataset(tmp_path):
+    import numpy as np
+    from data.generate_dataset import generate
+    from datasets.od_dataset import OdWindowDataset, fit_normalizers
+
+    path = tmp_path / "traj.npz"
+    generate(n_episodes=2, episode_len=20, out_path=str(path), seed=0)
+    blob = np.load(str(path))
+    assert blob["obs"].shape == (2, 20, 4)
+    assert blob["action"].shape == (2, 20, 3)
+
+    ds = OdWindowDataset(str(path), window=4, normalizers=fit_normalizers(str(path)))
+    item = ds[0]
+    assert item["obs"].shape == (4, 4)
+    assert item["action"].shape == (4, 3)
+    # normalized obs should be roughly zero-mean / unit-scale, not raw metres
+    assert abs(float(item["obs"].mean())) < 5.0
