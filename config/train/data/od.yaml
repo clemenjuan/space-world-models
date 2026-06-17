@@ -1,0 +1,5 @@
+path: data/cache/od_trajectories.npz
+window: ${eval:'${history_size} + ${num_preds}'}
+batch_size: 64
+train_split: 0.9
+

@@ -13,7 +13,10 @@ def fit_normalizers(npz_path):
         mean = flat.mean(0)
         std = flat.std(0)
         std[std < 1e-8] = 1.0
-        out[key] = (torch.tensor(mean, dtype=torch.float32), torch.tensor(std, dtype=torch.float32))
+        out[key] = (
+            torch.tensor(mean, dtype=torch.float32),
+            torch.tensor(std, dtype=torch.float32),
+        )
     return out
 
 

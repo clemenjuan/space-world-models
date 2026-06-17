@@ -66,7 +66,7 @@ envs/od_env.py            # NEW  Gymnasium OD env (Orekit EcksteinHechler dynami
 models/od_encoder.py      # NEW  MLP encoder: 4-dim obs -> 192 latent
 models/od_jepa.py         # NEW  ODJEPA(JEPA): overrides encode() for vector obs
 data/generate_dataset.py  # NEW  roll out N episodes -> trajectory dataset
-datasets/od_dataset.py    # NEW  windowed torch Dataset {"obs":(T,4),"action":(T,3)}
+od_datasets/od_dataset.py # NEW  windowed torch Dataset {"obs":(T,4),"action":(T,3)}
 train_od.py               # NEW  OD analogue of train.py (full Lightning loop)
 module.py                 # BASELINE, VERBATIM (SIGReg, ARPredictor, Embedder, MLP, ...)
 jepa.py                   # BASELINE (JEPA base class)
@@ -165,7 +165,7 @@ Mirrors `train.py` with OD substitutions.
 - Save trajectories of `obs (L, 4)` + `action (L, 3)` (+ true state for reference) to disk
   (`.npz` or HF-dataset on disk).
 
-### 6.2 `datasets/od_dataset.py`
+### 6.2 `od_datasets/od_dataset.py`
 - Windowed `torch.utils.data.Dataset`: yields `{"obs": (T, 4), "action": (T, 3)}` with
   `T = history_size + num_preds` windows sliced from trajectories.
 - `stable_pretraining.data.DataModule` + `DataLoader` (train/val split, seeded).

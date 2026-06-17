@@ -27,7 +27,7 @@ models/od_encoder.py      # OdEncoder: MLP 4 -> 256 -> 192
 models/od_jepa.py         # ODJEPA(JEPA): encode() override for vector obs
 models/od_forward.py      # od_lejepa_forward(): pred MSE + 0.09*SIGReg
 data/generate_dataset.py  # roll out episodes -> data/cache/od_trajectories.npz
-datasets/od_dataset.py    # OdWindowDataset + fit_normalizers + build_datamodule
+od_datasets/od_dataset.py # OdWindowDataset + fit_normalizers + build_datamodule
 train_od.py               # hydra entry: full Lightning training loop + W&B
 module.py                 # VENDORED from le-wm, verbatim
 jepa.py                   # VENDORED from le-wm, verbatim
@@ -782,7 +782,7 @@ git commit -m "feat: od_lejepa_forward (prediction MSE + 0.09*SIGReg)"
 
 **Files:**
 - Create: `data/generate_dataset.py`
-- Create: `datasets/od_dataset.py`
+- Create: `od_datasets/od_dataset.py`
 - Test: `tests/test_model.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -792,7 +792,7 @@ git commit -m "feat: od_lejepa_forward (prediction MSE + 0.09*SIGReg)"
 def test_window_dataset(tmp_path):
     import numpy as np
     from data.generate_dataset import generate
-    from datasets.od_dataset import OdWindowDataset, fit_normalizers
+    from od_datasets.od_dataset import OdWindowDataset, fit_normalizers
 
     path = tmp_path / "traj.npz"
     generate(n_episodes=2, episode_len=20, out_path=str(path), seed=0)
@@ -864,7 +864,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: Write the windowed Dataset + normalizers**
 
 ```python
-# datasets/od_dataset.py
+# od_datasets/od_dataset.py
 """Windowed torch Dataset over generated OD trajectories, with z-score normalization."""
 import numpy as np
 import torch
@@ -920,7 +920,7 @@ Expected: PASS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add data/generate_dataset.py datasets/od_dataset.py tests/test_model.py
+git add data/generate_dataset.py od_datasets/od_dataset.py tests/test_model.py
 git commit -m "feat: trajectory generation and windowed normalized dataset"
 ```
 
@@ -1039,7 +1039,7 @@ import torch
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader, random_split
 
-from datasets.od_dataset import OdWindowDataset, fit_normalizers
+from od_datasets.od_dataset import OdWindowDataset, fit_normalizers
 from models.od_forward import od_lejepa_forward
 from module import SIGReg
 
@@ -1112,7 +1112,7 @@ from functools import partial
 from torch.utils.data import DataLoader
 
 from data.generate_dataset import generate
-from datasets.od_dataset import OdWindowDataset, fit_normalizers
+from od_datasets.od_dataset import OdWindowDataset, fit_normalizers
 from models.od_forward import od_lejepa_forward
 from module import SIGReg
 

@@ -1,8 +1,14 @@
 """Roll out OdEnv episodes (zero action) and save trajectories to .npz."""
 import argparse
 import os
+import sys
+from pathlib import Path
 
 import numpy as np
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from envs.od_env import OdEnv
 

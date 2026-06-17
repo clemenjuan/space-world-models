@@ -51,7 +51,7 @@ def test_forward_losses_finite():
 def test_window_dataset(tmp_path):
     import numpy as np
     from data.generate_dataset import generate
-    from datasets.od_dataset import OdWindowDataset, fit_normalizers
+    from od_datasets.od_dataset import OdWindowDataset, fit_normalizers
 
     path = tmp_path / "traj.npz"
     generate(n_episodes=2, episode_len=20, out_path=str(path), seed=0)
