@@ -45,17 +45,22 @@ spec-compliance review → code-quality review → mark complete. Branch: `step1
   `train_od.py` mirrors `le-wm/train.py`; adapt call sites if signatures differ.
 
 ## Task status
-- [ ] Task 0 — project setup + vendored baseline (requirements, module.py, jepa.py, __init__)
-- [ ] Task 1 — Orekit bootstrap (`envs/orekit_setup.py`)
-- [ ] Task 2 — OdEnv dynamics core
-- [ ] Task 3 — OdEnv measurement model
-- [ ] Task 4 — 200-step rollout shape contract
-- [ ] Task 5 — invariants (J2 energy, h_z, SSO RAAN precession)
+- [x] Task 0 — project setup + vendored baseline (requirements, module.py, jepa.py, __init__)
+- [x] Task 1 — Orekit bootstrap (`envs/orekit_setup.py`)
+- [x] Task 2 — OdEnv dynamics core
+- [x] Task 3 — OdEnv measurement model
+- [x] Task 4 — 200-step rollout shape contract
+- [x] Task 5 — invariants (J2 energy, h_z, SSO RAAN precession)  [tests/test_env.py: 6 passed]
 - [ ] Task 6 — OdEncoder MLP
 - [ ] Task 7 — ODJEPA encode() override
 - [ ] Task 8 — od_lejepa_forward loss
 - [ ] Task 9 — dataset generation + windowed Dataset
 - [ ] Task 10 — configs + train_od.py + W&B + train smoke test
+
+## Notes for resumers
+- Env tests need the JVM up before importing `org.orekit.*`. If a test imports Constants
+  directly, call `ensure_orekit()` first (see `test_invariants_bounded`).
+- Harmless JVM-teardown traceback prints at pytest process exit; `6 passed` still reported.
 
 ## To resume
 1. `git checkout step1-od-env`; check `git log --oneline` to see which task commits exist.
