@@ -183,6 +183,11 @@ Mirrors `train.py` with OD substitutions.
 - `pl.Trainer(accelerator="auto", precision=32, max_epochs=<modest>, gradient_clip_val=1.0)`
   — **CPU-safe** (no GPU/bf16 assumption).
 - Checkpoint via `spt.Manager`.
+- **W&B logging:** reuse the baseline `WandbLogger` path (gated by `cfg.wandb.enabled`,
+  default `true`). Entity `sps-tum`; project read from `WANDB_PROJECT` env var with a
+  default of `space-world-models` (rename once the W&B project is created). Hyperparameters
+  logged via `logger.log_hyperparams`. Disable cleanly (`wandb.enabled=false`) for offline
+  CI / the train-smoke test.
 
 ### 6.5 Configs
 - `config/train/od.yaml`: `embed_dim=192`, `history_size=3`, `num_preds=1`,
@@ -190,6 +195,9 @@ Mirrors `train.py` with OD substitutions.
 - `config/train/model/od.yaml`: `encoder=OdEncoder`, baseline `predictor=ARPredictor`,
   `action_encoder=Embedder(input_dim=3)`, `projector`/`pred_proj` MLPs as baseline.
 - `config/train/data/od.yaml`: dataset path, window size, batch size, split.
+- `wandb` block in `config/train/od.yaml`: `enabled: true`, `config.entity: sps-tum`,
+  `config.project: ${oc.env:WANDB_PROJECT,space-world-models}`. The train-smoke test sets
+  `wandb.enabled=false`.
 
 ---
 
