@@ -16,8 +16,33 @@ training loop + smoke tests. No scheduling (Step 2), no FDIR (Step 3).
 
 ## Workflow in use
 Subagent-driven development (superpowers skill): per task, dispatch implementer ->
-spec-compliance review -> code-quality review -> mark complete. Branch: `step1-od-env`
-(off `master`). Each task ends with its own commit (see plan for messages).
+spec-compliance review -> code-quality review -> mark complete.
+**TRUNK-BASED ONLY: commit directly to `main` and push; do NOT create feature branches.**
+(User directive, 2026-06-17.) One commit per logical task.
+
+## Project status across steps (2026-06-17)
+- **Step 1 (OD env) — BUILT & trained-smoke-verified.** Code on `main`, 11 tests pass.
+- **Step 2 (FDIR env) — SPEC ONLY.** `docs/superpowers/specs/2026-06-17-fdir-env-design.md`.
+  Not implemented. Train-on-nominal then surprise = `||z_hat - enc(o)||^2`; state-level faults.
+- **Step 3 (EO scheduling env) — SPEC ONLY.**
+  `docs/superpowers/specs/2026-06-17-scheduling-env-design.md`. Not implemented. Orekit
+  access windows + Poisson requests + linear storage/power; env + forward pass only.
+- **Next action:** moving compute to the TUM VM (see "Running on the VM" below). First goal:
+  reproduce a real OD training run on the VM, THEN implement Step 2, then Step 3.
+
+## Running on the VM (Linux bootstrap) — autops-demo-clemente
+24 vCPU / 48 GB Ubuntu 24.04, no GPU (fine — models are ~8M params, CPU-trainable; the real
+cost is CPU-bound Orekit data gen, which parallelizes across the 24 cores). To set up:
+1. `sudo apt update && sudo apt install -y python3.12-venv default-jre git` (Java is required
+   by `orekit_jpype`; Ubuntu 24.04 default-jre = Java 21, works with orekit_jpype 13.x).
+2. `git clone https://github.com/clemenjuan/space-world-models.git && cd space-world-models`
+3. `python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt`
+4. First run auto-downloads `orekit-data.zip` via `ensure_orekit()` (needs internet; the TUM
+   network has it).
+5. `wandb login` (entity `sps-tum`, project `space-world-models`).
+6. Verify: `python -m pytest -v` should report all Step 1 tests passing.
+7. On Linux the `spt_compat` Windows signal/stdio shims are no-ops; the pyarrow patch may
+   still apply depending on installed `datasets`/`pyarrow` versions — keep calling it.
 
 ## Environment facts (verified live)
 - Windows 11, Python 3.12.6 at `C:\Python312\python.exe`. PowerShell + Git Bash available.
@@ -75,6 +100,9 @@ spec-compliance review -> code-quality review -> mark complete. Branch: `step1-o
   - `python -m pytest -v` -> `11 passed`
 
 ## To resume
-1. `git checkout step1-od-env`; check `git log --oneline` to see which task commits exist.
-2. Open the plan/spec and choose the next Step 2 work item.
-3. `pytest -v` should pass for all completed Step 1 tasks.
+1. On `main` (trunk-based; no branches). `git pull` then `git log --oneline` for current state.
+2. Bootstrap the VM per "Running on the VM" above; confirm `python -m pytest -v` passes.
+3. First milestone: a real OD training run on the VM (generate a real dataset, then
+   `python train_od.py` with W&B enabled) and confirm the loss converges.
+4. Then implement Step 2 (FDIR) and Step 3 (scheduling) from their approved specs via the
+   brainstorm-done -> writing-plans -> subagent-driven flow. Commit each task to `main`.
