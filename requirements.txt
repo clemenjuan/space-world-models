@@ -1,0 +1,12 @@
+torch>=2.2
+numpy>=1.26
+gymnasium>=0.29
+einops>=0.7
+orekit_jpype>=13.1
+stable_pretraining>=0.1.7
+stable_worldmodel>=0.1.1
+lightning>=2.2
+hydra-core>=1.3
+omegaconf>=2.3
+wandb>=0.16
+pytest>=8.0
