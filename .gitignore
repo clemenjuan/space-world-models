@@ -1,0 +1,23 @@
+# Orekit physical data (downloaded, ~70 MB)
+orekit-data.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Data & checkpoints
+data/cache/
+checkpoints/
+outputs/
+wandb/
+*.ckpt
+*.pt
+*.npz
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
