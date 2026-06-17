@@ -33,3 +33,16 @@ def test_odjepa_encode_predict_shapes():
     assert out["act_emb"].shape == (2, 3, 192)
     preds = model.predict(out["emb"], out["act_emb"])
     assert preds.shape == (2, 3, 192)
+
+
+def test_forward_losses_finite():
+    from module import SIGReg
+    from models.od_forward import od_lejepa_forward
+    model = _make_odjepa()
+    sigreg = SIGReg(knots=17, num_proj=128)
+    batch = {"obs": torch.randn(4, 4, 4), "action": torch.randn(4, 4, 3)}
+    cfg = dict(history_size=3, num_preds=1, sigreg_weight=0.09)
+    out = od_lejepa_forward(model, sigreg, batch, cfg)
+    for k in ("pred_loss", "sigreg_loss", "loss"):
+        assert torch.isfinite(out[k]).all()
+    assert out["loss"].requires_grad
