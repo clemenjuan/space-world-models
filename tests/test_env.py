@@ -40,3 +40,20 @@ def test_measurement_ranges_and_noise():
     env_noisy = OdEnv(noise_std=(10.0, 0.01, 0.01, 0.1))
     obs_n, _ = env_noisy.reset(seed=1)
     assert not np.allclose(obs, obs_n)
+
+
+def test_rollout_200_steps_shapes():
+    from envs.od_env import OdEnv
+    env = OdEnv()
+    obs, info = env.reset(seed=2)
+    obs_log, state_log = [obs], [info["state"]]
+    for _ in range(200):
+        obs, reward, terminated, truncated, info = env.step(np.zeros(3, dtype=np.float32))
+        obs_log.append(obs)
+        state_log.append(info["state"])
+    obs_arr = np.asarray(obs_log)
+    state_arr = np.asarray(state_log)
+    assert obs_arr.shape == (201, 4)
+    assert state_arr.shape == (201, 6)
+    assert np.isfinite(obs_arr).all()
+    assert np.isfinite(state_arr).all()
