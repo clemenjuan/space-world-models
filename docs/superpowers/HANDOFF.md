@@ -43,6 +43,13 @@ cost is CPU-bound Orekit data gen, which parallelizes across the 24 cores). To s
 6. Verify: `python -m pytest -v` should report all Step 1 tests passing.
 7. On Linux the `spt_compat` Windows signal/stdio shims are no-ops; the pyarrow patch may
    still apply depending on installed `datasets`/`pyarrow` versions — keep calling it.
+8. **No-AVX CPU (TUM VM is `qemu64`, flags = `sse4_1 sse4_2` only):** `pylance`'s native
+   ext raises an *uncatchable* SIGILL ("Illegal instruction") on import. `lance` is imported
+   only by `stable_pretraining.data.video` (unused by our vector-obs tasks), so
+   `spt_compat.stub_lance_if_no_avx()` registers a stub `lance` module before importing
+   `stable_pretraining` (gated on AVX absent from `/proc/cpuinfo`; no-op on real CPUs).
+   Called by `train_od.py` and `tests/test_train_smoke.py`. The real fix is host CPU
+   pass-through (`-cpu host`) at the hypervisor; torch/numpy/pyarrow already work on SSE4.
 
 ## Environment facts (verified live)
 - Windows 11, Python 3.12.6 at `C:\Python312\python.exe`. PowerShell + Git Bash available.

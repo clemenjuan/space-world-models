@@ -11,12 +11,14 @@ from spt_compat import (
     configure_utf8_stdio,
     patch_pyarrow_for_legacy_datasets,
     patch_stable_pretraining_windows_signals,
+    stub_lance_if_no_avx,
 )
 
 
 def test_train_smoke(tmp_path):
     configure_utf8_stdio()
     patch_pyarrow_for_legacy_datasets()
+    stub_lance_if_no_avx()
     import stable_pretraining as spt
     from tests.test_model import _make_odjepa
     patch_stable_pretraining_windows_signals()

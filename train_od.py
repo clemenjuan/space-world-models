@@ -14,6 +14,7 @@ from spt_compat import (
     configure_utf8_stdio,
     patch_pyarrow_for_legacy_datasets,
     patch_stable_pretraining_windows_signals,
+    stub_lance_if_no_avx,
 )
 
 
@@ -40,6 +41,7 @@ def _forward(self, batch, stage, cfg):
 def run(cfg):
     configure_utf8_stdio()
     patch_pyarrow_for_legacy_datasets()
+    stub_lance_if_no_avx()
     if OmegaConf.has_resolver("eval"):
         OmegaConf.clear_resolver("eval")
     import stable_pretraining as spt

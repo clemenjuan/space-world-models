@@ -24,6 +24,49 @@ def patch_pyarrow_for_legacy_datasets():
         pa.PyExtensionType = pa.ExtensionType
 
 
+def stub_lance_if_no_avx():
+    """Register a stub ``lance`` module on CPUs without AVX.
+
+    ``pylance``'s native extension is compiled for a newer x86-64 baseline and
+    raises SIGILL (an uncatchable illegal-instruction crash) on import on CPUs
+    without AVX -- e.g. the ``qemu64`` virtual CPU on the TUM VM, whose flags
+    expose only ``sse4_1``/``sse4_2``. ``lance`` is imported solely by
+    ``stable_pretraining.data.video`` (used only for video datasets, which our
+    vector-observation tasks never touch), so we satisfy ``import lance`` with a
+    stub before stable_pretraining imports it. On AVX-capable CPUs the real
+    package loads unchanged. Call before importing ``stable_pretraining``.
+    """
+    import sys
+
+    if "lance" in sys.modules:
+        return
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8") as fh:
+            cpuinfo = fh.read()
+    except OSError:
+        return  # not Linux / unreadable: let the real import proceed
+    if any(token.startswith("avx") for token in cpuinfo.split()):
+        return  # real pylance will load fine on an AVX-capable CPU
+
+    import types
+
+    stub = types.ModuleType("lance")
+    stub.__doc__ = (
+        "Stub injected by spt_compat: this CPU lacks AVX, so real pylance "
+        "cannot be imported. Video datasets are unavailable."
+    )
+
+    def _unavailable(*args, **kwargs):
+        raise RuntimeError(
+            "lance is stubbed because this CPU lacks AVX; video datasets are "
+            "unavailable on this machine."
+        )
+
+    stub.dataset = _unavailable
+    stub.write_dataset = _unavailable
+    sys.modules["lance"] = stub
+
+
 def patch_stable_pretraining_windows_signals():
     """Guard stable_pretraining signal logging on Windows."""
     import signal
