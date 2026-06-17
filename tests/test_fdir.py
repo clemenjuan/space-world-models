@@ -108,3 +108,30 @@ def test_surprise_shapes():
     scores = surprise_score(model, obs_seq, action_seq, history_size=history_size)
     assert scores.shape == (T - history_size,)
     assert torch.isfinite(scores).all()
+
+
+def test_fdir_dataset(tmp_path):
+    """Generated FDIR npz has the expected shapes/one-hot, and the Step-1
+    OdWindowDataset + fit_normalizers consume it unchanged (dim-agnostic)."""
+    from data.generate_fdir import generate
+
+    path = tmp_path / "fdir.npz"
+    generate(n_episodes=2, episode_len=20, out_path=str(path), seed=0)
+
+    blob = np.load(path)
+    obs, action, state = blob["obs"], blob["action"], blob["state"]
+    assert obs.shape == (2, 20, 8)
+    assert action.shape == (2, 20, 4)
+    assert state.shape == (2, 20, 8)
+    # Every action row is the one-hot of nominal action 0: [1, 0, 0, 0].
+    assert (action[..., 0] == 1).all()
+    assert (action[..., 1:] == 0).all()
+
+    # Reuse the EXISTING Step-1 dataset/normalizer code unchanged. This proves it
+    # is dimension-agnostic (8-dim obs, 4-dim action) without any modification.
+    from od_datasets.od_dataset import OdWindowDataset, fit_normalizers
+
+    ds = OdWindowDataset(str(path), window=4, normalizers=fit_normalizers(str(path)))
+    item = ds[0]
+    assert item["obs"].shape == (4, 8)
+    assert item["action"].shape == (4, 4)
