@@ -110,4 +110,24 @@ class OdEnv(gym.Env):
         return obs, 0.0, terminated, truncated, {"state": state}
 
     def _measure(self, st):
-        return np.zeros(4, dtype=np.float32)
+        from org.orekit.utils import PVCoordinates
+        from org.hipparchus.geometry.euclidean.threed import Vector3D
+
+        date = st.getDate()
+        sat = st.getPVCoordinates(self._eci)
+        pos = sat.getPosition()
+        sta = self._topo.getTransformTo(self._eci, date).transformPVCoordinates(
+            PVCoordinates.ZERO
+        )
+        rel_p = sat.getPosition().subtract(sta.getPosition())
+        rel_v = sat.getVelocity().subtract(sta.getVelocity())
+        rng = self._topo.getRange(pos, self._eci, date)
+        az = self._topo.getAzimuth(pos, self._eci, date)
+        el = self._topo.getElevation(pos, self._eci, date)
+        range_rate = Vector3D.dotProduct(rel_p, rel_v) / rel_p.getNorm()
+        # wrap azimuth from [0, 2pi) to [-pi, pi] to match observation_space
+        if az > math.pi:
+            az -= 2 * math.pi
+        clean = np.array([rng, az, el, range_rate], dtype=np.float64)
+        noisy = clean + self.np_random.normal(0.0, self.noise_std)
+        return noisy.astype(np.float32)

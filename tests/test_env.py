@@ -24,3 +24,19 @@ def test_state_shape_and_propagation():
     s0 = info["state"].copy()
     _, _, _, _, info2 = env.step(np.zeros(3, dtype=np.float32))
     assert not np.allclose(s0, info2["state"])
+
+
+def test_measurement_ranges_and_noise():
+    from envs.od_env import OdEnv
+
+    env = OdEnv(noise_std=(0.0, 0.0, 0.0, 0.0))
+    obs, _ = env.reset(seed=1)
+    rng, az, el, rr = obs
+    assert 3e5 < rng < 5e7
+    assert -math.pi <= az <= math.pi
+    assert -math.pi / 2 <= el <= math.pi / 2
+    assert abs(rr) < 1e4
+
+    env_noisy = OdEnv(noise_std=(10.0, 0.01, 0.01, 0.1))
+    obs_n, _ = env_noisy.reset(seed=1)
+    assert not np.allclose(obs, obs_n)
