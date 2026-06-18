@@ -17,6 +17,12 @@ def test_state_shape_and_propagation():
     env = OdEnv()
     obs, info = env.reset(seed=0)
     assert info["state"].shape == (6,)
+    assert info["geometry"]["time_s"].shape == (1,)
+    assert info["geometry"]["station_state_eci"].shape == (6,)
+    assert info["geometry"]["topocentric_basis_eci"].shape == (3, 3)
+    assert float(info["geometry"]["time_s"][0]) == 0.0
+    station_r = np.linalg.norm(info["geometry"]["station_state_eci"][:3])
+    assert 6.3e6 < station_r < 6.5e6
     r = np.linalg.norm(info["state"][:3])
     v = np.linalg.norm(info["state"][3:])
     assert 6.7e6 < r < 6.9e6
@@ -24,6 +30,7 @@ def test_state_shape_and_propagation():
     s0 = info["state"].copy()
     _, _, _, _, info2 = env.step(np.zeros(3, dtype=np.float32))
     assert not np.allclose(s0, info2["state"])
+    assert float(info2["geometry"]["time_s"][0]) == env.dt
 
 
 def test_measurement_ranges_and_noise():

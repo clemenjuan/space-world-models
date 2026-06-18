@@ -135,3 +135,88 @@ def test_fdir_dataset(tmp_path):
     item = ds[0]
     assert item["obs"].shape == (4, 8)
     assert item["action"].shape == (4, 4)
+
+
+def test_fdir_detection(tmp_path):
+    from torch.utils.data import DataLoader
+
+    from data.generate_fdir import generate
+    from envs.fdir_env import FdirEnv
+    from models.od_forward import od_lejepa_forward
+    from models.surprise import surprise_score
+    from module import SIGReg
+    from od_datasets.od_dataset import OdWindowDataset, fit_normalizers
+
+    torch.manual_seed(0)
+    np.random.seed(0)
+
+    path = tmp_path / "fdir_nominal.npz"
+    generate(n_episodes=40, episode_len=160, out_path=str(path), seed=0)
+    norms = fit_normalizers(str(path))
+    ds = OdWindowDataset(str(path), window=4, normalizers=norms)
+    gen = torch.Generator().manual_seed(0)
+    loader = DataLoader(ds, batch_size=64, shuffle=True, generator=gen)
+
+    model = _make_fdir_odjepa(embed_dim=64)
+    sigreg = SIGReg(knots=17, num_proj=64)
+    opt = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    cfg = {"history_size": 3, "num_preds": 1, "sigreg_weight": 0.09}
+
+    model.train()
+    for _ in range(8):
+        for batch in loader:
+            opt.zero_grad(set_to_none=True)
+            out = od_lejepa_forward(model, sigreg, batch, cfg)
+            out["loss"].backward()
+            opt.step()
+
+    fault_step = 100
+    episode_len = 160
+    # Use the spec-supported spike fault for this tiny deterministic smoke: the
+    # default stuck-at voltage fault is too subtle relative to the short-test
+    # latent surprise variance, while a 20-step state-level impulse separates
+    # cleanly without changing the relative k=3 threshold.
+    env = FdirEnv(
+        fault_mode="spike",
+        fault_channel="solar_array_voltage",
+        fault_step=fault_step,
+        spike_magnitude=5.0,
+        spike_duration=20,
+        max_steps=episode_len,
+    )
+    obs, _ = env.reset(seed=3)
+    obs_seq = [obs]
+    for _ in range(episode_len - 1):
+        obs, _, _, _, _ = env.step(0)
+        obs_seq.append(obs)
+
+    obs_tensor = torch.tensor(np.asarray(obs_seq), dtype=torch.float32)
+    obs_mean, obs_std = norms["obs"]
+    obs_norm = ((obs_tensor - obs_mean) / obs_std).unsqueeze(0)
+
+    action_onehot = torch.zeros(1, episode_len, 4, dtype=torch.float32)
+    action_onehot[..., 0] = 1.0
+    action_mean, action_std = norms["action"]
+    # Match OdWindowDataset normalization used during training; for all-nominal
+    # one-hot actions this becomes the constant zero action sequence.
+    action_norm = (action_onehot - action_mean) / action_std
+
+    model.eval()
+    scores = surprise_score(model, obs_norm, action_norm, history_size=3)
+
+    history_size = 3
+    pre = scores[80 - history_size : fault_step - history_size]
+    post = scores[fault_step - history_size : episode_len - history_size]
+    pre_mean = float(pre.mean())
+    pre_std = float(pre.std(unbiased=False))
+    post_mean = float(post.mean())
+    margin = post_mean - pre_mean
+    threshold = 3.0 * pre_std
+    print(
+        "fdir surprise "
+        f"pre_mean={pre_mean:.6f} pre_std={pre_std:.6f} "
+        f"post_mean={post_mean:.6f} margin={margin:.6f} "
+        f"threshold={threshold:.6f}"
+    )
+    assert post_mean > pre_mean + threshold
+

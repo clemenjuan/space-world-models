@@ -99,7 +99,7 @@ class OdEnv(gym.Env):
         self._step = 0
         st, state = self._state_at(0)
         obs = self._measure(st)
-        return obs, {"state": state}
+        return obs, {"state": state, "geometry": self._geometry(st)}
 
     def step(self, action):
         self._step += 1
@@ -107,18 +107,42 @@ class OdEnv(gym.Env):
         obs = self._measure(st)
         terminated = False
         truncated = self._step >= self.max_steps
-        return obs, 0.0, terminated, truncated, {"state": state}
+        return obs, 0.0, terminated, truncated, {"state": state, "geometry": self._geometry(st)}
+
+    def _station_pv(self, st):
+        from org.orekit.utils import PVCoordinates
+
+        return self._topo.getTransformTo(self._eci, st.getDate()).transformPVCoordinates(
+            PVCoordinates.ZERO
+        )
+
+    def _geometry(self, st):
+        from org.hipparchus.geometry.euclidean.threed import Vector3D
+
+        sta = self._station_pv(st)
+        p = sta.getPosition()
+        v = sta.getVelocity()
+        transform = self._topo.getTransformTo(self._eci, st.getDate())
+        axes = []
+        for local_axis in (Vector3D.PLUS_I, Vector3D.PLUS_J, Vector3D.PLUS_K):
+            axis = transform.transformVector(local_axis)
+            axes.append([axis.getX(), axis.getY(), axis.getZ()])
+        return {
+            "time_s": np.asarray([self.dt * self._step], dtype=np.float64),
+            "station_state_eci": np.asarray(
+                [p.getX(), p.getY(), p.getZ(), v.getX(), v.getY(), v.getZ()],
+                dtype=np.float64,
+            ),
+            "topocentric_basis_eci": np.asarray(axes, dtype=np.float64),
+        }
 
     def _measure(self, st):
-        from org.orekit.utils import PVCoordinates
         from org.hipparchus.geometry.euclidean.threed import Vector3D
 
         date = st.getDate()
         sat = st.getPVCoordinates(self._eci)
         pos = sat.getPosition()
-        sta = self._topo.getTransformTo(self._eci, date).transformPVCoordinates(
-            PVCoordinates.ZERO
-        )
+        sta = self._station_pv(st)
         rel_p = sat.getPosition().subtract(sta.getPosition())
         rel_v = sat.getVelocity().subtract(sta.getVelocity())
         rng = self._topo.getRange(pos, self._eci, date)

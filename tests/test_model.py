@@ -65,3 +65,34 @@ def test_window_dataset(tmp_path):
     assert item["action"].shape == (4, 3)
     # normalized obs should be roughly zero-mean / unit-scale, not raw metres
     assert abs(float(item["obs"].mean())) < 5.0
+
+
+def test_geometry_dataset_and_raw_decoder_features(tmp_path):
+    import numpy as np
+    from data.generate_dataset import generate
+    from scripts.train_od_geometry_decoder import _build_raw_features
+
+    path = tmp_path / "traj_geometry.npz"
+    generate(n_episodes=2, episode_len=12, out_path=str(path), seed=0, save_geometry=True)
+    blob = np.load(str(path))
+    assert blob["obs"].shape == (2, 12, 4)
+    assert blob["state"].shape == (2, 12, 6)
+    assert blob["time_s"].shape == (2, 12)
+    assert blob["station_state_eci"].shape == (2, 12, 6)
+    assert blob["topocentric_basis_eci"].shape == (2, 12, 3, 3)
+
+    dataset = {key: blob[key] for key in blob.files}
+    features = _build_raw_features(dataset, window=4)
+    assert features.x.shape == (2 * 9, 4 * 13)
+    assert features.y.shape == (2 * 9, 6)
+    assert features.step_feature_dim == 13
+    assert features.target_index[0] == 3
+    assert np.isclose(features.time_min[0], 1.5)
+    assert np.isfinite(features.x).all()
+    assert np.isfinite(features.y).all()
+
+    eci_features = _build_raw_features(dataset, window=4, mode="raw_eci")
+    assert eci_features.x.shape == (2 * 9, 4 * 22)
+    assert eci_features.y.shape == (2 * 9, 6)
+    assert eci_features.step_feature_dim == 22
+    assert np.isfinite(eci_features.x).all()
