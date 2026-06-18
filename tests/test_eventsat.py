@@ -118,3 +118,62 @@ def test_eventsat_generator_dataset_and_model_forward(tmp_path):
     assert out["act_emb"].shape == (1, 4, 64)
     assert pred.shape == (1, 3, 64)
     assert torch.isfinite(pred).all()
+
+
+
+def test_eventsat_decoder_forward_shape():
+    from scripts.eventsat_world_model_utils import EventSatStateDecoder
+
+    decoder = EventSatStateDecoder(input_dim=64, hidden_dim=32, depth=1, output_dim=18)
+    out = decoder(torch.randn(5, 64))
+    assert out.shape == (5, 18)
+    assert torch.isfinite(out).all()
+
+
+def test_eventsat_action_trace_loader_json(tmp_path):
+    import json
+
+    from scripts.evaluate_eventsat_action_trace import load_actions
+
+    path = tmp_path / "actions.json"
+    path.write_text(json.dumps({"actions": ["charging", "payload_observe", "communication"]}))
+    actions, source = load_actions(path)
+    assert source.endswith("actions.json")
+    assert actions.tolist() == [0, 2, 1]
+
+
+def test_eventsat_mpc_candidates_respect_first_action_safety():
+    from envs.eventsat_env import EventSatEnv, MODE_TO_INDEX
+    from scripts.run_eventsat_lewm_mpc import generate_candidate_sequences, safe_first_action_mask
+
+    env = EventSatEnv(max_steps=32, randomize_phase=False)
+    env.reset(seed=0)
+    mask = safe_first_action_mask(env)
+    assert mask[MODE_TO_INDEX["charging"]]
+    assert not mask[MODE_TO_INDEX["communication"]]
+
+    candidates = generate_candidate_sequences(
+        env,
+        horizon=4,
+        n_random=16,
+        rng=np.random.default_rng(0),
+    )
+    assert candidates.shape[1] == 4
+    allowed = set(np.flatnonzero(mask).tolist())
+    assert set(candidates[:, 0].tolist()).issubset(allowed)
+
+
+def test_eventsat_board_html_accepts_missing_artifacts():
+    from scripts.build_eventsat_results_board import _html
+
+    html = _html(
+        dataset={"ok": False, "message": "missing"},
+        runs=[],
+        week={"ok": False, "message": "missing"},
+        decoder={"ok": False, "message": "missing"},
+        trace={"ok": False, "message": "missing"},
+        mpc={"ok": False, "message": "missing"},
+    )
+    assert "Decoder Quality" in html
+    assert "Fixed Trace Evaluator" in html
+    assert "Controller Comparison" in html

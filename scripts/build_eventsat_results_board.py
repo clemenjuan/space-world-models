@@ -23,6 +23,9 @@ DATASET = ROOT / "data/cache/eventsat_trajectories.npz"
 RUN_ROOT = Path.home() / ".cache/stable-pretraining/runs"
 OUT = ROOT / "data/figures/eventsat_results_board.html"
 WEEK = ROOT / "data/figures/eventsat_week_inference.json"
+DECODER_METRICS = ROOT / "data/figures/eventsat_state_decoder_metrics.json"
+TRACE_EVAL = ROOT / "data/figures/eventsat_action_trace_evaluation.json"
+MPC_WEEK = ROOT / "data/figures/eventsat_lewm_mpc_week.json"
 
 SERIES_KEYS = [
     "fit/loss",
@@ -227,13 +230,23 @@ def _week_payload() -> dict[str, Any]:
     return payload
 
 
+def _artifact_payload(path: Path, label: str) -> dict[str, Any]:
+    if not path.exists():
+        return {"ok": False, "message": f"{label} not found: {path.relative_to(ROOT)}"}
+    payload = _read_json(path)
+    if not payload:
+        return {"ok": False, "message": f"Could not read {path.relative_to(ROOT)}"}
+    payload.setdefault("ok", True)
+    return payload
+
+
 def _card(label: str, value: str, sub: str = "") -> str:
     return f'<div class="card"><div class="label">{label}</div><div class="value">{value}</div><div class="sub">{sub}</div></div>'
 
 
-def _html(dataset: dict[str, Any], runs: list[dict[str, Any]], week: dict[str, Any]) -> str:
+def _html(dataset: dict[str, Any], runs: list[dict[str, Any]], week: dict[str, Any], decoder: dict[str, Any], trace: dict[str, Any], mpc: dict[str, Any]) -> str:
     latest = runs[0] if runs else {}
-    payload = json.dumps({"dataset": dataset, "runs": runs, "week": week}, allow_nan=False)
+    payload = json.dumps({"dataset": dataset, "runs": runs, "week": week, "decoder": decoder, "trace": trace, "mpc": mpc}, allow_nan=False)
     ds_cards = ""
     if week.get("ok"):
         summary = week["summary"]
@@ -278,6 +291,30 @@ def _html(dataset: dict[str, Any], runs: list[dict[str, Any]], week: dict[str, A
             _card("Fit Pred", _fmt_metric(latest.get("fit_pred_loss")), "fit/pred_loss"),
             _card("Week MSE", _fmt_metric(week_mse), "one-step latent"),
             _card("Model / Persist", _fmt_metric(week_ratio), "lower is better"),
+        ]
+    )
+
+    decoder_rmse = None
+    decoder_accept = False
+    if decoder.get("ok"):
+        decoder_rmse = _maybe_float(decoder.get("predicted_latent_decode", {}).get("rmse", {}).get("battery_soc"))
+        decoder_accept = bool(decoder.get("acceptance", {}).get("target_latent_decode", {}).get("beats_best_simple_on_all_key_targets"))
+
+    trace_unsafe = trace.get("safety_flags", {}).get("true", {}).get("unsafe") if trace.get("ok") else None
+    trace_source = trace.get("action_source", trace.get("message", "missing"))
+    if len(str(trace_source)) > 34:
+        trace_source = str(trace_source)[:31] + "..."
+
+    mpc_delta = mpc.get("summary", {}).get("delta_lewm_mpc_minus_heuristic", {}) if mpc.get("ok") else {}
+    mpc_flags = mpc.get("safety_flags", {}).get("lewm_mpc", {}) if mpc.get("ok") else {}
+    artifact_cards = "\n".join(
+        [
+            _card("Decoder SoC RMSE", _fmt_metric(decoder_rmse), "predicted latent; target beats simple: " + ("yes" if decoder_accept else "no")),
+            _card("Trace Source", str(trace_source), "fixed action evaluator"),
+            _card("Trace Unsafe", "yes" if trace_unsafe else ("no" if trace_unsafe is False else "n/a"), "true simplified sim flags"),
+            _card("MPC Downlink Delta", _fmt_metric(_maybe_float(mpc_delta.get("final_downlinked_mb"))), "MB vs heuristic"),
+            _card("MPC Obs Delta", _fmt_metric(_maybe_float(mpc_delta.get("observation_min"))), "minutes vs heuristic"),
+            _card("MPC Unsafe", "yes" if mpc_flags.get("unsafe") else ("no" if mpc.get("ok") else "n/a"), "battery/storage/invalid flags"),
         ]
     )
 
@@ -343,13 +380,17 @@ def _html(dataset: dict[str, Any], runs: list[dict[str, Any]], week: dict[str, A
 <body>
 <header>
   <h1>EventSat LeWM Board</h1>
-  <div class="sub">One-week nominal EventSat rollout: resources, contact windows, payload pipeline, commanded modes, and LeWM prediction error against persistence.</div>
+  <div class="sub">EventSat operations world-model board: decoder quality, fixed-trace evaluation, scripted heuristic week, and toy LeWM-MPC controller comparison.</div>
 </header>
 <main>
   <section class="cards">{ds_cards}</section>
   <section class="cards">{run_cards}</section>
+  <section class="cards">{artifact_cards}</section>
   {explain_panel}
   <section class="grid">
+    <div class="panel wide"><h2>Decoder Quality</h2><div id="decoder" class="plot"></div></div>
+    <div class="panel"><h2>Fixed Trace Evaluator</h2><div id="trace" class="plot"></div></div>
+    <div class="panel"><h2>Controller Comparison</h2><div id="mpc" class="plot"></div></div>
     <div class="panel wide"><h2>Week Resource And Contact Timeline</h2><div id="resources" class="plot"></div></div>
     <div class="panel"><h2>Week Data Pipeline</h2><div id="pipeline" class="plot"></div></div>
     <div class="panel"><h2>Week Mode Timeline</h2><div id="modes" class="plot"></div></div>
@@ -365,12 +406,15 @@ const colors = {{blue:"#0065bd", green:"#2f7d32", red:"#c62828", gold:"#a66a00",
 const ds = DATA.dataset;
 const run = (DATA.runs || [])[0] || null;
 const wk = DATA.week || {{ok:false, message:"No week inference"}};
+const dec = DATA.decoder || {{ok:false, message:"No decoder metrics"}};
+const tr = DATA.trace || {{ok:false, message:"No fixed trace evaluation"}};
+const mpc = DATA.mpc || {{ok:false, message:"No MPC rollout"}};
 const layoutBase = {{margin:{{t:18,b:48,l:58,r:58}}, paper_bgcolor:"#fff", plot_bgcolor:"#fff", legend:{{orientation:"h", y:-0.22}}, font:{{family:"Arial, sans-serif", size:12}}}};
 function plotEmpty(id, msg) {{
   Plotly.newPlot(id, [{{x:[0], y:[0], mode:"text", text:[msg], textposition:"middle center", showlegend:false}}], {{...layoutBase, xaxis:{{visible:false}}, yaxis:{{visible:false}}}}, {{displayModeBar:false, responsive:true}});
 }}
 if (!wk.ok && !ds.ok) {{
-  ["resources","pipeline","modes","counters","hist","training","week"].forEach(id => plotEmpty(id, wk.message || ds.message || "No data"));
+  ["decoder","trace","mpc","resources","pipeline","modes","counters","hist","training","week"].forEach(id => plotEmpty(id, wk.message || ds.message || "No data"));
 }} else {{
   const op = wk.ok ? wk : ds;
   const t = wk.ok ? (wk.time_hour || wk.time_step) : ds.time_min;
@@ -378,6 +422,48 @@ if (!wk.ok && !ds.ok) {{
   const modeNames = op.mode_names || ds.mode_names || [];
   const modeLabel = op.mode_label || [];
   const resolvedLabel = op.resolved_label || [];
+
+  if (dec.ok) {{
+    const keys = ["battery_soc", "obc_data_mb", "jetson_raw_mb", "jetson_compressed_mb", "data_downlinked_mb", "reward"];
+    const predRmse = ((dec.predicted_latent_decode || {{}}).rmse || {{}});
+    const targetRmse = ((dec.target_latent_decode || {{}}).rmse || {{}});
+    const persistRmse = (((dec.baselines || {{}}).persistence || {{}}).rmse || {{}});
+    Plotly.newPlot("decoder", [
+      {{x:keys, y:keys.map(k => predRmse[k] ?? null), name:"predicted latent", type:"bar", marker:{{color:colors.blue}}}},
+      {{x:keys, y:keys.map(k => targetRmse[k] ?? null), name:"encoded latent", type:"bar", marker:{{color:colors.green}}}},
+      {{x:keys, y:keys.map(k => persistRmse[k] ?? null), name:"persistence", type:"bar", marker:{{color:colors.red}}}}
+    ], {{...layoutBase, barmode:"group", xaxis:{{title:"decoded target"}}, yaxis:{{title:"RMSE"}}}}, {{responsive:true}});
+  }} else {{
+    plotEmpty("decoder", dec.message || "No decoder metrics yet");
+  }}
+
+  if (tr.ok) {{
+    const labels = ["downlinked MB", "obs min", "detections", "stored MB"];
+    const trueSummary = tr.true_summary || {{}};
+    const predSummary = tr.predicted_summary || {{}};
+    const trueVals = [trueSummary.final_downlinked_mb, trueSummary.observation_min, trueSummary.detections, trueSummary.final_stored_mb];
+    const predVals = [predSummary.final_downlinked_mb, predSummary.observation_min, predSummary.detections, predSummary.final_stored_mb];
+    Plotly.newPlot("trace", [
+      {{x:labels, y:trueVals, name:"real simplified sim", type:"bar", marker:{{color:colors.green}}}},
+      {{x:labels, y:predVals, name:"world model + decoder", type:"bar", marker:{{color:colors.blue}}}}
+    ], {{...layoutBase, barmode:"group", xaxis:{{title:tr.action_source || "action trace"}}, yaxis:{{title:"summary value"}}}}, {{responsive:true}});
+  }} else {{
+    plotEmpty("trace", tr.message || "No fixed trace evaluation yet");
+  }}
+
+  if (mpc.ok) {{
+    const labels = ["downlinked MB", "obs min", "detections", "stored MB"];
+    const mpcSummary = ((mpc.summary || {{}}).lewm_mpc || {{}});
+    const heuristicSummary = ((mpc.summary || {{}}).heuristic || {{}});
+    const mpcVals = [mpcSummary.final_downlinked_mb, mpcSummary.observation_min, mpcSummary.detections, mpcSummary.final_stored_mb];
+    const heuristicVals = [heuristicSummary.final_downlinked_mb, heuristicSummary.observation_min, heuristicSummary.detections, heuristicSummary.final_stored_mb];
+    Plotly.newPlot("mpc", [
+      {{x:labels, y:heuristicVals, name:"scripted heuristic", type:"bar", marker:{{color:colors.gray}}}},
+      {{x:labels, y:mpcVals, name:"LeWM-MPC", type:"bar", marker:{{color:colors.violet}}}}
+    ], {{...layoutBase, barmode:"group", xaxis:{{title:"closed-loop controller result"}}, yaxis:{{title:"summary value"}}}}, {{responsive:true}});
+  }} else {{
+    plotEmpty("mpc", mpc.message || "No MPC rollout yet");
+  }}
 
   Plotly.newPlot("resources", [
     {{x:t, y:op.soc || [], name:"battery SoC", type:"scatter", mode:"lines", line:{{color:colors.blue, width:2}}}},
@@ -439,6 +525,9 @@ def main() -> None:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     dataset = _dataset_payload()
     week = _week_payload()
+    decoder = _artifact_payload(DECODER_METRICS, "Decoder metrics")
+    trace = _artifact_payload(TRACE_EVAL, "Action trace evaluation")
+    mpc = _artifact_payload(MPC_WEEK, "LeWM-MPC rollout")
     runs = [run for run in _find_runs() if _is_eventsat_run(run)]
     runs.sort(
         key=lambda run: (
@@ -447,7 +536,7 @@ def main() -> None:
             -(run.get("epoch") or -1),
         )
     )
-    OUT.write_text(_html(dataset, runs, week), encoding="utf-8")
+    OUT.write_text(_html(dataset, runs, week, decoder, trace, mpc), encoding="utf-8")
     print(f"wrote {OUT.relative_to(ROOT)}")
 
 
