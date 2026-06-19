@@ -26,6 +26,8 @@ WEEK = ROOT / "data/figures/eventsat_week_inference.json"
 DECODER_METRICS = ROOT / "data/figures/eventsat_state_decoder_metrics.json"
 TRACE_EVAL = ROOT / "data/figures/eventsat_action_trace_evaluation.json"
 MPC_WEEK = ROOT / "data/figures/eventsat_lewm_mpc_week.json"
+LITE_DECODER_METRICS = ROOT / "data/figures/eventsat_lite_delta_decoder_metrics.json"
+LITE_RANKING = ROOT / "data/figures/eventsat_lite_trace_ranking.json"
 
 SERIES_KEYS = [
     "fit/loss",
@@ -244,9 +246,9 @@ def _card(label: str, value: str, sub: str = "") -> str:
     return f'<div class="card"><div class="label">{label}</div><div class="value">{value}</div><div class="sub">{sub}</div></div>'
 
 
-def _html(dataset: dict[str, Any], runs: list[dict[str, Any]], week: dict[str, Any], decoder: dict[str, Any], trace: dict[str, Any], mpc: dict[str, Any]) -> str:
+def _html(dataset: dict[str, Any], runs: list[dict[str, Any]], week: dict[str, Any], decoder: dict[str, Any], trace: dict[str, Any], mpc: dict[str, Any], lite_decoder: dict[str, Any], lite_ranking: dict[str, Any]) -> str:
     latest = runs[0] if runs else {}
-    payload = json.dumps({"dataset": dataset, "runs": runs, "week": week, "decoder": decoder, "trace": trace, "mpc": mpc}, allow_nan=False)
+    payload = json.dumps({"dataset": dataset, "runs": runs, "week": week, "decoder": decoder, "trace": trace, "mpc": mpc, "lite_decoder": lite_decoder, "lite_ranking": lite_ranking}, allow_nan=False)
     ds_cards = ""
     if week.get("ok"):
         summary = week["summary"]
@@ -307,6 +309,10 @@ def _html(dataset: dict[str, Any], runs: list[dict[str, Any]], week: dict[str, A
 
     mpc_delta = mpc.get("summary", {}).get("delta_lewm_mpc_minus_heuristic", {}) if mpc.get("ok") else {}
     mpc_flags = mpc.get("safety_flags", {}).get("lewm_mpc", {}) if mpc.get("ok") else {}
+    lite_rmse = None
+    if lite_decoder.get("ok"):
+        lite_rmse = _maybe_float(lite_decoder.get("predicted_latent_decode", {}).get("continuous", {}).get("rmse", {}).get("delta_data_downlinked_mb"))
+    lite_metric = lite_ranking.get("metric", {}) if lite_ranking.get("ok") else {}
     artifact_cards = "\n".join(
         [
             _card("Decoder SoC RMSE", _fmt_metric(decoder_rmse), "predicted latent; target beats simple: " + ("yes" if decoder_accept else "no")),
@@ -315,6 +321,9 @@ def _html(dataset: dict[str, Any], runs: list[dict[str, Any]], week: dict[str, A
             _card("MPC Downlink Delta", _fmt_metric(_maybe_float(mpc_delta.get("final_downlinked_mb"))), "MB vs heuristic"),
             _card("MPC Obs Delta", _fmt_metric(_maybe_float(mpc_delta.get("observation_min"))), "minutes vs heuristic"),
             _card("MPC Unsafe", "yes" if mpc_flags.get("unsafe") else ("no" if mpc.get("ok") else "n/a"), "battery/storage/invalid flags"),
+            _card("Lite Downlink dRMSE", _fmt_metric(lite_rmse), "macro-action delta decoder"),
+            _card("Lite Rank Top", "yes" if lite_metric.get("top_match") else ("no" if lite_ranking.get("ok") else "n/a"), "predicted best matches truth"),
+            _card("Lite Rank Spearman", _fmt_metric(_maybe_float(lite_metric.get("spearman_predicted_vs_true"))), "trace score ranking"),
         ]
     )
 
@@ -373,7 +382,7 @@ def _html(dataset: dict[str, Any], runs: list[dict[str, Any]], week: dict[str, A
     .explain p {{ margin:8px 0 0; font-size:13px; line-height:1.45; color:var(--ink); }}
     .rules {{ margin:8px 0 0; padding-left:20px; font-size:12px; line-height:1.45; }}
     .rules li {{ margin:3px 0; }}
-     (max-width: 980px) {{ .explain-grid {{ grid-template-columns:1fr; }} }}
+    @media (max-width: 980px) {{ .explain-grid {{ grid-template-columns:1fr; }} }}
     @media (max-width: 860px) {{ .grid {{ grid-template-columns:1fr; }} main {{ padding:18px; }} header {{ padding:22px 18px; }} }}
   </style>
 </head>
@@ -388,6 +397,7 @@ def _html(dataset: dict[str, Any], runs: list[dict[str, Any]], week: dict[str, A
   <section class="cards">{artifact_cards}</section>
   {explain_panel}
   <section class="grid">
+    <div class="panel wide"><h2>EventSat-Lite Curriculum Gate</h2><div id="lite" class="plot"></div></div>
     <div class="panel wide"><h2>Decoder Quality</h2><div id="decoder" class="plot"></div></div>
     <div class="panel"><h2>Fixed Trace Evaluator</h2><div id="trace" class="plot"></div></div>
     <div class="panel"><h2>Controller Comparison</h2><div id="mpc" class="plot"></div></div>
@@ -409,12 +419,14 @@ const wk = DATA.week || {{ok:false, message:"No week inference"}};
 const dec = DATA.decoder || {{ok:false, message:"No decoder metrics"}};
 const tr = DATA.trace || {{ok:false, message:"No fixed trace evaluation"}};
 const mpc = DATA.mpc || {{ok:false, message:"No MPC rollout"}};
+const liteDec = DATA.lite_decoder || {{ok:false, message:"No Lite decoder metrics"}};
+const liteRank = DATA.lite_ranking || {{ok:false, message:"No Lite trace ranking"}};
 const layoutBase = {{margin:{{t:18,b:48,l:58,r:58}}, paper_bgcolor:"#fff", plot_bgcolor:"#fff", legend:{{orientation:"h", y:-0.22}}, font:{{family:"Arial, sans-serif", size:12}}}};
 function plotEmpty(id, msg) {{
   Plotly.newPlot(id, [{{x:[0], y:[0], mode:"text", text:[msg], textposition:"middle center", showlegend:false}}], {{...layoutBase, xaxis:{{visible:false}}, yaxis:{{visible:false}}}}, {{displayModeBar:false, responsive:true}});
 }}
 if (!wk.ok && !ds.ok) {{
-  ["decoder","trace","mpc","resources","pipeline","modes","counters","hist","training","week"].forEach(id => plotEmpty(id, wk.message || ds.message || "No data"));
+  ["lite","decoder","trace","mpc","resources","pipeline","modes","counters","hist","training","week"].forEach(id => plotEmpty(id, wk.message || ds.message || "No data"));
 }} else {{
   const op = wk.ok ? wk : ds;
   const t = wk.ok ? (wk.time_hour || wk.time_step) : ds.time_min;
@@ -422,6 +434,16 @@ if (!wk.ok && !ds.ok) {{
   const modeNames = op.mode_names || ds.mode_names || [];
   const modeLabel = op.mode_label || [];
   const resolvedLabel = op.resolved_label || [];
+
+  if (liteRank.ok) {{
+    const rows = liteRank.traces || [];
+    Plotly.newPlot("lite", [
+      {{x:rows.map(r => r.trace), y:rows.map(r => r.true_score), name:"real simplified sim", type:"bar", marker:{{color:colors.green}}}},
+      {{x:rows.map(r => r.trace), y:rows.map(r => r.predicted_score), name:"world model score", type:"bar", marker:{{color:colors.blue}}}}
+    ], {{...layoutBase, barmode:"group", xaxis:{{title:"EventSat-Lite trace", tickangle:-18}}, yaxis:{{title:"ranking score"}}, annotations:[{{xref:"paper", yref:"paper", x:0, y:1.16, showarrow:false, align:"left", text:`top match: ${{(liteRank.metric || {{}}).top_match ? "yes" : "no"}} · Spearman: ${{Number((liteRank.metric || {{}}).spearman_predicted_vs_true ?? 0).toFixed(3)}} · downlink dRMSE: ${{Number((((liteDec.predicted_latent_decode || {{}}).continuous || {{}}).rmse || {{}}).delta_data_downlinked_mb ?? 0).toFixed(4)}}`}}]}}, {{responsive:true}});
+  }} else {{
+    plotEmpty("lite", liteRank.message || liteDec.message || "No EventSat-Lite trace ranking yet");
+  }}
 
   if (dec.ok) {{
     const keys = ["battery_soc", "obc_data_mb", "jetson_raw_mb", "jetson_compressed_mb", "data_downlinked_mb", "reward"];
@@ -528,6 +550,8 @@ def main() -> None:
     decoder = _artifact_payload(DECODER_METRICS, "Decoder metrics")
     trace = _artifact_payload(TRACE_EVAL, "Action trace evaluation")
     mpc = _artifact_payload(MPC_WEEK, "LeWM-MPC rollout")
+    lite_decoder = _artifact_payload(LITE_DECODER_METRICS, "EventSat-Lite delta decoder")
+    lite_ranking = _artifact_payload(LITE_RANKING, "EventSat-Lite trace ranking")
     runs = [run for run in _find_runs() if _is_eventsat_run(run)]
     runs.sort(
         key=lambda run: (
@@ -536,7 +560,7 @@ def main() -> None:
             -(run.get("epoch") or -1),
         )
     )
-    OUT.write_text(_html(dataset, runs, week, decoder, trace, mpc), encoding="utf-8")
+    OUT.write_text(_html(dataset, runs, week, decoder, trace, mpc, lite_decoder, lite_ranking), encoding="utf-8")
     print(f"wrote {OUT.relative_to(ROOT)}")
 
 

@@ -173,7 +173,68 @@ def test_eventsat_board_html_accepts_missing_artifacts():
         decoder={"ok": False, "message": "missing"},
         trace={"ok": False, "message": "missing"},
         mpc={"ok": False, "message": "missing"},
+        lite_decoder={"ok": False, "message": "missing"},
+        lite_ranking={"ok": False, "message": "missing"},
     )
     assert "Decoder Quality" in html
     assert "Fixed Trace Evaluator" in html
     assert "Controller Comparison" in html
+
+
+
+def test_eventsat_lite_macro_pipeline():
+    from envs.eventsat_lite_env import EventSatLiteEnv, LITE_MODE_TO_INDEX
+
+    env = EventSatLiteEnv(max_steps=32, randomize_phase=False)
+    env.reset(seed=0)
+    env.step(LITE_MODE_TO_INDEX["observe"])
+    assert env.uncompressed_observations == 1
+    assert env.jetson_raw_mb > 0.0
+
+    env.step(LITE_MODE_TO_INDEX["process_to_obc"])
+    env.step(LITE_MODE_TO_INDEX["process_to_obc"])
+    assert env.uncompressed_observations == 0
+    assert env.undetected_observations == 1
+    assert env.jetson_compressed_mb > 0.0
+
+    for _ in range(env.detection_steps):
+        env.step(LITE_MODE_TO_INDEX["process_to_obc"])
+    assert env.undetected_observations == 0
+    assert env.total_detections == 1
+
+    before = env.obc_data_mb
+    env.step(LITE_MODE_TO_INDEX["process_to_obc"])
+    assert env.obc_data_mb > before
+
+
+def test_eventsat_lite_generator_dataset(tmp_path):
+    from data.generate_eventsat_lite import generate
+
+    path = tmp_path / "eventsat_lite.npz"
+    generate(n_episodes=3, episode_len=40, out_path=str(path), seed=1, policy="balanced", exploration=0.2)
+    blob = np.load(path)
+    assert blob["obs"].shape == (3, 40, 25)
+    assert blob["action"].shape == (3, 40, 4)
+    assert blob["state"].shape == (3, 40, 16)
+    assert blob["mode"].shape == (3, 40)
+    assert set(blob["scenario"].tolist()).issubset({
+        "empty_nominal", "raw_backlog", "compressed_backlog", "obc_backlog", "low_battery", "storage_pressure"
+    })
+    assert np.allclose(blob["action"].sum(axis=-1), 1.0)
+
+
+def test_eventsat_lite_delta_target_shape():
+    from envs.eventsat_env import STATE_NAMES
+    from scripts.train_eventsat_lite_delta_decoder import TARGET_NAMES, _build_target
+
+    state_prev = np.zeros((2, len(STATE_NAMES)), dtype=np.float32)
+    state_final = state_prev.copy()
+    state_final[:, 0] = [0.9, 0.2]
+    state_final[:, 4] = [1.5, 0.0]
+    state_final[:, 9] = [60.0, 0.0]
+    state_final[:, 10] = [1.0, 0.0]
+    target = _build_target(state_final, state_prev, np.asarray([0.1, -0.1], dtype=np.float32))
+    assert target.shape == (2, len(TARGET_NAMES))
+    assert target[0, TARGET_NAMES.index("event_observation")] == 1.0
+    assert target[0, TARGET_NAMES.index("event_detection")] == 1.0
+    assert target[0, TARGET_NAMES.index("event_downlink")] == 1.0
