@@ -151,10 +151,10 @@ def find_eventsat_runs(run_root: Path = RUN_ROOT, dataset: str = "data/cache/eve
     return runs
 
 
-def best_eventsat_run() -> dict[str, Any]:
-    runs = find_eventsat_runs()
+def best_eventsat_run(dataset: str = "data/cache/eventsat_trajectories.npz") -> dict[str, Any]:
+    runs = find_eventsat_runs(dataset=dataset)
     if not runs:
-        raise RuntimeError("no EventSat ODJEPA run with a checkpoint found")
+        raise RuntimeError(f"no EventSat ODJEPA run with a checkpoint found for {dataset}")
     return runs[0]
 
 
@@ -166,10 +166,14 @@ def _strip_model_prefix(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.
     return out or state_dict
 
 
-def load_eventsat_model(run: dict[str, Any] | None = None, device: str | torch.device = "cpu") -> tuple[Any, Any, dict[str, Any]]:
+def load_eventsat_model(
+    run: dict[str, Any] | None = None,
+    device: str | torch.device = "cpu",
+    dataset: str = "data/cache/eventsat_trajectories.npz",
+) -> tuple[Any, Any, dict[str, Any]]:
     torch.backends.nnpack.enabled = False
     device = torch.device(device)
-    run = best_eventsat_run() if run is None else run
+    run = best_eventsat_run(dataset=dataset) if run is None else run
     cfg = OmegaConf.load(Path(run["run_dir"]) / "hparams.yaml")
     model = hydra.utils.instantiate(cfg.model)
     checkpoint = torch.load(run["checkpoint"], map_location="cpu", weights_only=False)

@@ -1,0 +1,42 @@
+defaults:
+  - _self_
+  - model: eventsat_lite
+  - data: eventsat_lite
+
+seed: 3072
+embed_dim: 192
+history_size: 3
+num_preds: 1
+
+loss:
+  sigreg:
+    weight: 0.09
+    kwargs:
+      knots: 17
+      num_proj: 1024
+
+optimizer:
+  lr: 5e-5
+  weight_decay: 1e-3
+
+trainer:
+  max_epochs: 8
+  accelerator: auto
+  devices: auto
+  precision: 32
+  gradient_clip_val: 1.0
+
+wandb:
+  enabled: true
+  config:
+    entity: sps-tum
+    project: ${oc.env:WANDB_PROJECT,space-world-models}
+    name: ${oc.env:WANDB_RUN_NAME,eventsat-lite-macro4-128ep-256step-8epoch-h3-p1}
+    tags:
+      - eventsat-lite
+      - macro4
+      - nominal
+      - obs25
+      - action4
+      - len256
+      - ep128
