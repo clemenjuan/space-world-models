@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Space World Models Results</title>
+<style>
+  :root {
+    --blue: #0065bd;
+    --ink: #172026;
+    --muted: #61707d;
+    --line: #d9e1e7;
+    --paper: #ffffff;
+    --bg: #eef2f5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background: var(--bg);
+    font-family: Arial, Helvetica, sans-serif;
+  }
+  header {
+    background: var(--paper);
+    border-bottom: 2px solid var(--blue);
+    padding: 30px 40px 22px;
+  }
+  h1 {
+    margin: 0 0 6px;
+    color: var(--blue);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 26px;
+    font-weight: 600;
+  }
+  .sub {
+    max-width: 900px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  main {
+    max-width: 1180px;
+    padding: 28px 40px 52px;
+  }
+  section { margin-bottom: 30px; }
+  h2 {
+    margin: 0 0 12px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+    gap: 14px;
+  }
+  a.card {
+    display: block;
+    min-height: 126px;
+    padding: 16px 18px;
+    color: inherit;
+    text-decoration: none;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  a.card:hover {
+    border-color: var(--blue);
+    transform: translateY(-2px);
+  }
+  .title {
+    display: block;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .file {
+    display: block;
+    margin-top: 4px;
+    color: var(--blue);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+  }
+  .desc {
+    display: block;
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  footer {
+    padding: 0 40px 30px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Space World Models Results</h1>
+  <div class="sub">
+    Supervisor-facing launch page served from port <code>8801</code>.
+    Active work is EventSat scheduling with latent world models and MPC; archived OD and FDIR boards remain visible here for continuity.
+  </div>
+</header>
+<main>
+  <section>
+    <h2>Active Scheduling Track</h2>
+    <div class="cards">
+      <a class="card" href="eventsat_results_board.html">
+        <span class="title">EventSat Scheduling Board</span>
+        <span class="file">eventsat_results_board.html</span>
+        <span class="desc">Main LeWM/EventSat board: decoder quality, trace evaluation, scripted week rollout, EventSat-Lite curriculum, and toy LeWM-MPC comparison.</span>
+      </a>
+      <a class="card" href="eventsat_lewm_mpc_week.json">
+        <span class="title">LeWM-MPC Week Result</span>
+        <span class="file">eventsat_lewm_mpc_week.json</span>
+        <span class="desc">Raw controller comparison payload used by the active EventSat board.</span>
+      </a>
+      <a class="card" href="eventsat_action_trace_evaluation.json">
+        <span class="title">Action Trace Evaluation</span>
+        <span class="file">eventsat_action_trace_evaluation.json</span>
+        <span class="desc">Fixed action-trace prediction and safety evaluation for supplied EventSat command traces.</span>
+      </a>
+    </div>
+  </section>
+
+  <section>
+    <h2>Archived Results Still Visible</h2>
+    <div class="cards">
+      <a class="card" href="legacy/results_board.html">
+        <span class="title">OD LeWM Board</span>
+        <span class="file">legacy/results_board.html</span>
+        <span class="desc">Archived orbit-determination board, kept out of the active source tree but available for discussion.</span>
+      </a>
+      <a class="card" href="legacy/od_compare.html">
+        <span class="title">Analytical vs LeWM Decode</span>
+        <span class="file">legacy/od_compare.html</span>
+        <span class="desc">Archived OD comparison page with ECI overlays and decoder diagnostics.</span>
+      </a>
+      <a class="card" href="legacy/fdir_results_board.html">
+        <span class="title">FDIR Surprise Board</span>
+        <span class="file">legacy/fdir_results_board.html</span>
+        <span class="desc">Archived FDIR latent-surprise results and benchmark comparisons.</span>
+      </a>
+    </div>
+  </section>
+
+  <section>
+    <h2>Directory Access</h2>
+    <div class="cards">
+      <a class="card" href="legacy/">
+        <span class="title">Archived Artifact Directory</span>
+        <span class="file">legacy/</span>
+        <span class="desc">Browse archived OD/FDIR figures, metrics, and generated artifacts from the old tracks.</span>
+      </a>
+    </div>
+  </section>
+</main>
+<footer>
+  Served from <code>/home/clemente/space-world-models/data/figures</code>.
+  Restart with <code>python scripts/serve_board.py</code> if needed.
+</footer>
+</body>
+</html>

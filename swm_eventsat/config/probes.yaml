@@ -1,0 +1,10 @@
+dataset: data/cache/eventsat_trajectories.npz
+checkpoint: null
+targets:
+  - battery_soc
+  - obc_data_mb
+  - jetson_raw_mb
+  - jetson_compressed_mb
+  - data_downlinked_mb
+ridge: 1e-4
+

@@ -1,0 +1,7 @@
+horizon: 12
+population: 512
+elite_frac: 0.1
+iterations: 4
+reserve_soc: 0.5
+allow_unsafe: false
+

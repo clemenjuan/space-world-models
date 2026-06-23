@@ -8,14 +8,23 @@ __pycache__/
 .venv/
 venv/
 
-# Data & checkpoints
+# Data, local result boards, and checkpoints
 data/cache/
+data/figures/*
+!data/figures/
+!data/figures/index.html
+!data/figures/legacy
+
+legacy/
 checkpoints/
 outputs/
 wandb/
 *.ckpt
 *.pt
 *.npz
+
+# Local agent workspace
+.claude/
 
 # OS / IDE
 .DS_Store

@@ -7,7 +7,7 @@ operations-system comparison so the world-model question stays small.
 
 ## Question
 
-Can the same vector LeWM / ODJEPA stack learn nominal spacecraft operations
+Can the same vector LeWM/VectorJEPA stack learn nominal spacecraft operations
 dynamics from mode-command trajectories?
 
 Compared with the existing tracks:
@@ -82,7 +82,7 @@ the resolved mode for diagnostics, but the LeWM action input is the command.
 
 File: `data/generate_eventsat.py`
 
-The generator saves the same schema used by OD and FDIR:
+The generator saves the same schema used by EventSat:
 
 ```text
 obs:    (episode, time, 25)
@@ -115,7 +115,7 @@ Files:
 - `config/train/model/eventsat.yaml`
 - `config/train/data/eventsat.yaml`
 
-The model is the existing `ODJEPA` stack with:
+The model is the existing `VectorJEPA` stack with:
 
 ```text
 encoder input dim = 25
@@ -125,7 +125,7 @@ history size      = 3
 num preds         = 1
 ```
 
-The existing `OdWindowDataset`, normalizers, `od_lejepa_forward`, and SIGReg
+The existing `WindowedTrajectoryDataset`, normalizers, `lewm_forward`, and SIGReg
 loss are reused unchanged.
 
 ## First Metrics To Inspect

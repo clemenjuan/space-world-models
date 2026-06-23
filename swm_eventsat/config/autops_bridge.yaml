@@ -1,0 +1,8 @@
+autops_root: ~/autops-agentic-framework
+scenario_file: configs/scenarios/eventsat.yaml
+episodes: 8
+steps: 256
+seed: 0
+out: data/cache/autops_eventsat_trajectories.npz
+board_port: 8801
+

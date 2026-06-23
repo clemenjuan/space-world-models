@@ -4,11 +4,11 @@ import torch
 
 
 def _make_eventsat_odjepa(embed_dim=64, history=3):
-    from models.od_jepa import ODJEPA
-    from models.od_encoder import OdEncoder
-    from module import ARPredictor, Embedder, MLP
+    from core.models.components import ARPredictor, Embedder, MLP
+    from core.models.vector_encoder import VectorEncoder
+    from core.models.vector_jepa import VectorJEPA
 
-    encoder = OdEncoder(25, 128, embed_dim)
+    encoder = VectorEncoder(25, 128, embed_dim)
     predictor = ARPredictor(
         num_frames=history,
         input_dim=embed_dim,
@@ -23,11 +23,11 @@ def _make_eventsat_odjepa(embed_dim=64, history=3):
     action_encoder = Embedder(input_dim=7, smoothed_dim=7, emb_dim=embed_dim)
     projector = MLP(embed_dim, 128, embed_dim, norm_fn=None)
     pred_proj = MLP(embed_dim, 128, embed_dim, norm_fn=None)
-    return ODJEPA(encoder, predictor, action_encoder, projector, pred_proj)
+    return VectorJEPA(encoder, predictor, action_encoder, projector, pred_proj)
 
 
 def test_eventsat_env_contract_and_windows():
-    from envs.eventsat_env import EventSatEnv, MODE_TO_INDEX
+    from swm_eventsat.data.toy_eventsat_env import EventSatEnv, MODE_TO_INDEX
 
     env = EventSatEnv(max_steps=220)
     obs, info = env.reset(seed=0)
@@ -58,7 +58,7 @@ def test_eventsat_env_contract_and_windows():
 
 
 def test_eventsat_payload_pipeline_scripted():
-    from envs.eventsat_env import EventSatEnv, MODE_TO_INDEX
+    from swm_eventsat.data.toy_eventsat_env import EventSatEnv, MODE_TO_INDEX
 
     env = EventSatEnv(max_steps=64, randomize_phase=False)
     env.reset(seed=1)
@@ -87,8 +87,8 @@ def test_eventsat_payload_pipeline_scripted():
 
 
 def test_eventsat_generator_dataset_and_model_forward(tmp_path):
-    from data.generate_eventsat import generate
-    from od_datasets.od_dataset import OdWindowDataset, fit_normalizers
+    from core.data.window_dataset import WindowedTrajectoryDataset, fit_normalizers
+    from swm_eventsat.experiments.generate_dataset import generate
 
     path = tmp_path / "eventsat.npz"
     generate(n_episodes=2, episode_len=48, out_path=str(path), seed=0, exploration=0.0)
@@ -101,7 +101,7 @@ def test_eventsat_generator_dataset_and_model_forward(tmp_path):
     assert np.isfinite(obs).all()
     assert np.isfinite(state).all()
 
-    ds = OdWindowDataset(str(path), window=4, normalizers=fit_normalizers(str(path)))
+    ds = WindowedTrajectoryDataset(str(path), window=4, normalizers=fit_normalizers(str(path)))
     item = ds[0]
     assert item["obs"].shape == (4, 25)
     assert item["action"].shape == (4, 7)
@@ -122,7 +122,7 @@ def test_eventsat_generator_dataset_and_model_forward(tmp_path):
 
 
 def test_eventsat_decoder_forward_shape():
-    from scripts.eventsat_world_model_utils import EventSatStateDecoder
+    from swm_eventsat.models.checkpoint_io import EventSatStateDecoder
 
     decoder = EventSatStateDecoder(input_dim=64, hidden_dim=32, depth=1, output_dim=18)
     out = decoder(torch.randn(5, 64))
@@ -133,7 +133,7 @@ def test_eventsat_decoder_forward_shape():
 def test_eventsat_action_trace_loader_json(tmp_path):
     import json
 
-    from scripts.evaluate_eventsat_action_trace import load_actions
+    from swm_eventsat.experiments.evaluate_trace import load_actions
 
     path = tmp_path / "actions.json"
     path.write_text(json.dumps({"actions": ["charging", "payload_observe", "communication"]}))
@@ -143,8 +143,8 @@ def test_eventsat_action_trace_loader_json(tmp_path):
 
 
 def test_eventsat_mpc_candidates_respect_first_action_safety():
-    from envs.eventsat_env import EventSatEnv, MODE_TO_INDEX
-    from scripts.run_eventsat_lewm_mpc import generate_candidate_sequences, safe_first_action_mask
+    from swm_eventsat.data.toy_eventsat_env import EventSatEnv, MODE_TO_INDEX
+    from swm_eventsat.experiments.run_mpc import generate_candidate_sequences, safe_first_action_mask
 
     env = EventSatEnv(max_steps=32, randomize_phase=False)
     env.reset(seed=0)
@@ -164,7 +164,7 @@ def test_eventsat_mpc_candidates_respect_first_action_safety():
 
 
 def test_eventsat_board_html_accepts_missing_artifacts():
-    from scripts.build_eventsat_results_board import _html
+    from swm_eventsat.experiments.build_local_board import _html
 
     html = _html(
         dataset={"ok": False, "message": "missing"},
@@ -183,7 +183,7 @@ def test_eventsat_board_html_accepts_missing_artifacts():
 
 
 def test_eventsat_lite_macro_pipeline():
-    from envs.eventsat_lite_env import EventSatLiteEnv, LITE_MODE_TO_INDEX
+    from swm_eventsat.data.eventsat_lite_env import EventSatLiteEnv, LITE_MODE_TO_INDEX
 
     env = EventSatLiteEnv(max_steps=32, randomize_phase=False)
     env.reset(seed=0)
@@ -208,7 +208,7 @@ def test_eventsat_lite_macro_pipeline():
 
 
 def test_eventsat_lite_generator_dataset(tmp_path):
-    from data.generate_eventsat_lite import generate
+    from swm_eventsat.experiments.generate_lite_dataset import generate
 
     path = tmp_path / "eventsat_lite.npz"
     generate(n_episodes=3, episode_len=40, out_path=str(path), seed=1, policy="balanced", exploration=0.2)
@@ -224,8 +224,8 @@ def test_eventsat_lite_generator_dataset(tmp_path):
 
 
 def test_eventsat_lite_delta_target_shape():
-    from envs.eventsat_env import STATE_NAMES
-    from scripts.train_eventsat_lite_delta_decoder import TARGET_NAMES, _build_target
+    from swm_eventsat.data.toy_eventsat_env import STATE_NAMES
+    from swm_eventsat.experiments.train_lite_delta_probe import TARGET_NAMES, _build_target
 
     state_prev = np.zeros((2, len(STATE_NAMES)), dtype=np.float32)
     state_final = state_prev.copy()

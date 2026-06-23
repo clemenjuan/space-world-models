@@ -76,7 +76,7 @@ hybrid agents.
 
 ## What The Current Model Does
 
-The current EventSat LeWM/ODJEPA model learns action-conditioned dynamics:
+The current EventSat LeWM/VectorJEPA model learns action-conditioned dynamics:
 
 ```text
 recent observations + one-hot mode actions -> next latent observation embedding
