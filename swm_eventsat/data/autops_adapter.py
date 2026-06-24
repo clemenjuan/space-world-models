@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from swm_eventsat.data.trajectory_schema import (
+from swm_eventsat.schema import (
     EVENTSAT_MODE_LIST,
     EVENTSAT_MODE_TO_INDEX,
     TrajectoryBatch,

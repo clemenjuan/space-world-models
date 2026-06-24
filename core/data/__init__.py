@@ -1,4 +1,4 @@
-"""Dataset utilities shared by OD, FDIR, and scheduling experiments."""
+"""Dataset utilities for vector world-model trajectory archives."""
 
 from core.data.window_dataset import WindowedTrajectoryDataset, fit_normalizers
 

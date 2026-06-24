@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from swm_eventsat.dreamerv3_adapter import DreamerV3TrainingSpec, write_training_spec
+from swm_eventsat.models.dreamerv3 import DreamerV3TrainingSpec, write_training_spec
 
 
 def main() -> None:

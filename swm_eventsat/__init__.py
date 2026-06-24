@@ -5,17 +5,17 @@ AUTOPS remains the canonical simulator, evaluator, and board surface.
 """
 
 from .schema import (
-    ACTION11_NAMES,
+    ACTION_NAMES,
     AUTOPS_STATE_NAMES,
     MODE_LIST,
     WorldModelDataset,
     load_world_model_dataset,
 )
-from .artifacts import LeWMArtifact, PlannerArtifact, ProbeArtifact
-from .planners import CEMPlanner
+from .models.artifacts import LeWMArtifact, PlannerArtifact, ProbeArtifact
+from .planning import CEMPlanner
 
 __all__ = [
-    "ACTION11_NAMES",
+    "ACTION_NAMES",
     "AUTOPS_STATE_NAMES",
     "MODE_LIST",
     "WorldModelDataset",

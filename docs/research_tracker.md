@@ -1,89 +1,200 @@
-# Research Tracker: WM-Based Satellite Autonomy
+# Research Tracker: EventSat LeWM-MPC
 *Last updated: June 23, 2026*
 
----
+## Rule
 
-## Paper 1 — Latent WM-Based Mission Planning
+No trash files. Keep one concise tracker, necessary source modules, and scripts that are actually run.
 
-**Draft title:** Latent World Model-Based Mission Planning for Autonomous Satellite Operations  
-**Code focus:** `space-world-models/swm_eventsat/`  
-**Env + baselines:** `autops-agentic-framework/` (EventSat case)
+## Paper Claim
 
-### Methodology (core contribution)
+**Draft title:** Latent World Model-Based Mission Planning for Autonomous Satellite Operations
 
-- **World model:** LeWorldModel (LeWM, arXiv:2603.19312) as **transition model**  
-  \(\hat{\mathbf{z}}_{t+1} = f_\theta(\hat{\mathbf{z}}_t, \mathbf{a}_t)\)  
-  JEPA with SIGReg Gaussian latent; ~15M params, trainable on 1 GPU, edge-friendly.
+The method is an **autonomous onboard (AO)** controller for EventSat: at every timestep it observes the current spacecraft state, rolls out candidate mode sequences in a latent world model, applies the first action, and replans.
 
-- **Representation:** latent state \(\hat{\mathbf{z}}_t\) where physical quantities are linearly decodable (shown in LeWM via probing).
+Training data may come from AO, AG, AH, symbolic, LLM, or scheduled traces. For transition learning, the action source does not matter as long as each tuple is clean:
 
-- **Linear probes:** for each mission attribute \(k\) (battery, thermal, buffer, pointing, …):  
-  \(f_k(\mathbf{z}) = \mathbf{w}_k^\top \mathbf{z} + b_k\)  
-  trained on **synthetic telemetry** from the AUTOPS/EventSat simulator.
+```text
+obs_t, action_t -> obs_{t+1}, state_{t+1}, reward_t
+```
 
-- **Multi-objective utility in latent space:**  
-  terminal-only, deployable form  
-  \(U(\hat{\mathbf{z}}_{1:H}) = \mathbf{W}\hat{\mathbf{z}}_H + \mathbf{b}\)  
-  with \(\mathbf{w} \in \Delta^K\) acting as **mission mode selector** (science / safe / downlink).
+The evaluation claim stays AO closed-loop.
 
-- **Planner:** CEM in latent space (latent MPC): sample action sequences, roll out with LeWM, score via \(U\), execute first action, recede horizon.
+## Repo Boundary
 
-### Application domain
+`space-world-models` owns the research method:
 
-- **Scenario:** single-satellite EventSat mission in `autops-agentic-framework`.  
-- **Task:** multi-objective mission scheduling balancing main metrics:
-  - science data utility
-  - battery safety
-  - thermal safety
-  - downlink buffer
-  - pointing/slew constraints
-  - more from the framework
+- LeWM/VectorJEPA training on EventSat trajectories;
+- AUTOPS dataset loading and validation;
+- linear probes from latent state to mission attributes;
+- latent utility and CEM-MPC planner;
+- compact artifacts for AUTOPS to consume.
 
-LeWM+MPC is implemented as an additional planner using the same simulator interface and logging as existing AUTOPS planners.
+`autops-agentic-framework` owns the truth environment and benchmark surface:
 
-### Evaluation
+- EventSat simulator;
+- baseline planners and operations paradigms;
+- world-model trace export;
+- results board and metrics.
 
-- **Evaluation surface:** EventSat case board (same metrics, same logging).
-- **Baselines:**
-  - Existing AUTOPS planners (rule-based, LLM-agent, RL, etc.).
-  - DreamerV3-based MBRL planner (simulation-only baseline).
-  - Random shooting MPC (no learned WM).
+## AUTOPS Dataset Contract
 
-- **Key metrics:**
-  - Mission utility \(U\) per episode (for different mission modes \(\mathbf{w}\)).
-  - Constraint violations (battery/thermal/pointing).
-  - Planning latency on NVIDIA Jetson Orin Nano.
+Canonical dataset: `eventsat_world_model_v1`.
 
-**Abstract hook:**  
-“We propose a latent world model-based planning framework for satellite mission scheduling. Using LeWorldModel as a fast latent-space simulator combined with linear probes and a multi-objective utility, we perform MPC entirely in imagination and validate the approach on an EventSat mission scenario, comparing against existing planners and a DreamerV3-based baseline, with a focus on edge deployment.”
+Required arrays:
 
----
+```text
+obs           float32  (episode, time, 25)
+action        float32  (episode, time, 7)
+state         float32  (episode, time, 25)
+reward        float32  (episode, time)
+mode          int64    (episode, time)
+resolved_mode int64    (episode, time)
+forced_mode   float32  (episode, time)
+episode_seed  int64    (episode,)
+episode_id    int64    (episode,) optional but preferred
+```
 
-## Paper 2 — CTDE World Models for Constellations (Future Work)
+Action is 7D, one-hot over the operational EventSat modes:
 
-**Draft title:** CTDE World Models for Decentralized Multi-Satellite Constellation Scheduling
+```text
+0 charging
+1 communication
+2 payload_observe
+3 payload_compress
+4 payload_detect
+5 payload_send
+6 safe
+```
 
-- Extend Paper 1 from single-sat planning to **multi-sat coordination** under CTDE.
-- **Centralized WM** for joint dynamics (physics prior + learned residuals).
-- **Per-satellite modules** with factorized latents (DMAWM-style).
-- **Execution:** decentralized policies, WM used only in training.
+AUTOPS v1 state is simulator-native. Thermal and pointing are **not** probe targets unless AUTOPS is extended to simulate them.
 
-**Benchmark target:** SatBench (satellite coordination MARL benchmark).  
-Compare CTDE-WM against model-free MARL and simpler shared-WM baselines.
+Useful state/probe attributes now:
 
----
+- battery margin;
+- storage margin;
+- downlink progress;
+- science observation progress;
+- detection progress;
+- communication opportunity;
+- forced-mode risk;
+- health/anomaly-safe flag.
 
-## Key References (short list)
+## Current Export
 
-- **LeWM:** JEPA world model, SIGReg, 15M params, edge-suited.  
-- **DreamerV3:** RSSM + actor-critic in imagination, SOTA MBRL; RL-AVIST shows use in space.
-- **GAWM, DMAWM, M3W, LOGO, COLA:** CTDE/MARL world-model methods for future constellation work.
-- **SatBench:** ready-made multi-satellite coordination benchmark.
+The intended full export is produced in AUTOPS:
 
----
+```bash
+cd ~/autops-agentic-framework
+uv run python scripts/export_eventsat_world_model_traces.py \
+  configs/experiments/eventsat_sas_ao_symb.yaml \
+  configs/experiments/eventsat_sas_ag_symb.yaml \
+  configs/experiments/eventsat_sas_ah_symb_symb.yaml \
+  --episodes 5 \
+  --steps 10080 \
+  --seed 42 \
+  --out data/world_model/eventsat_autops_v1
+```
 
-## PhD Storyline (one-liner per step)
+Expected output:
 
-1. EUCASS — model-free MARL for constellation ops.  
-2. Paper 1 — single-satellite latent WM + MPC beats existing planners and is deployable on edge.  
-3. Paper 2 — CTDE WMs for coordinated autonomy at constellation scale.
+```text
+~/autops-agentic-framework/data/world_model/eventsat_autops_v1/eventsat_world_model_v1.npz
+~/autops-agentic-framework/data/world_model/eventsat_autops_v1/eventsat_world_model_v1.metadata.json
+```
+
+Observed full-export shape when available:
+
+```text
+obs    (15, 10080, 25)
+action (15, 10080, 7)
+state  (15, 10080, 25)
+```
+
+## Method Pipeline
+
+1. Export AUTOPS EventSat traces.
+2. Validate with `swm_eventsat.schema.load_world_model_dataset`.
+3. Train LeWM with 25D observations and 7D mode actions.
+4. Train linear probes from frozen LeWM latents to AUTOPS mission attributes.
+5. Build a planner artifact: checkpoint, normalizers, probe weights, utility weights, CEM settings.
+6. Run LeWM-CEM as an AUTOPS AO representation.
+7. Refresh the AUTOPS board and compare against AO symbolic/LLM/HLLM baselines.
+
+W&B training entry point:
+
+```bash
+cd ~/space-world-models
+WANDB_MODE=online \
+WANDB_PROJECT=space-world-models \
+WANDB_RUN_NAME=eventsat-autops-action7-lewm-full \
+.venv/bin/python -m swm_eventsat.experiments.train_world_model \
+  --config-name train_autops
+```
+
+Equivalent explicit smoke entry point:
+
+```bash
+cd ~/space-world-models
+.venv/bin/python -m swm_eventsat.experiments.train_world_model \
+  data.path=/home/clemente/autops-agentic-framework/data/world_model/eventsat_autops_v1/eventsat_world_model_v1.npz \
+  model.action_encoder.input_dim=7 \
+  model.action_encoder.smoothed_dim=7 \
+  trainer.max_epochs=1 \
+  wandb.enabled=false
+```
+
+Probe smoke entry point, before real frozen LeWM latents are available:
+
+```bash
+cd ~/space-world-models
+.venv/bin/python -m swm_eventsat.experiments.train_autops_probes \
+  --dataset /home/clemente/autops-agentic-framework/data/world_model/eventsat_autops_v1/eventsat_world_model_v1.npz \
+  --out outputs/eventsat_autops_probe_smoke.npz
+```
+
+Latent probe and planner artifact handoff after LeWM training:
+
+```bash
+cd ~/space-world-models
+.venv/bin/python -m swm_eventsat.experiments.export_autops_latents \
+  --dataset /home/clemente/autops-agentic-framework/data/world_model/eventsat_autops_v1/eventsat_world_model_v1.npz \
+  --checkpoint /path/to/lewm.ckpt \
+  --out outputs/eventsat_autops_latents.npz
+
+.venv/bin/python -m swm_eventsat.experiments.train_autops_probes \
+  --dataset /home/clemente/autops-agentic-framework/data/world_model/eventsat_autops_v1/eventsat_world_model_v1.npz \
+  --latents outputs/eventsat_autops_latents.npz \
+  --out outputs/eventsat_autops_probe_latent.npz
+
+.venv/bin/python -m swm_eventsat.experiments.write_planner_artifact \
+  --dataset /home/clemente/autops-agentic-framework/data/world_model/eventsat_autops_v1/eventsat_world_model_v1.npz \
+  --checkpoint /path/to/lewm.ckpt \
+  --probe outputs/eventsat_autops_probe_latent.npz \
+  --out outputs/eventsat_autops_lewm/planner_artifact.json
+```
+
+AUTOPS learned rollout requires Torch in the AUTOPS runtime. Use `uv run --extra rl autops run ...`; `strict_artifact: true` prevents silent surrogate fallback.
+
+## Baselines
+
+Primary comparisons should be AO because LeWM-CEM replans onboard at every timestep.
+
+Use AG/AH traces and planners as:
+
+- training data for transition coverage;
+- cross-paradigm baseline context;
+- ablations for whether ground-style schedules improve world-model training.
+
+Do not frame AG whole-pass planning as the main LeWM-CEM method unless a separate ground-assisted latent planner is explicitly introduced.
+
+## Still Needed
+
+- Train a non-smoke LeWM checkpoint on the full AUTOPS export.
+- Build the LeWM checkpoint + normalizers + probes + utility-weight artifact.
+- Run AUTOPS `lewm_cem_eventsat` with `planner_artifact` set to the generated artifact.
+- Run paired-seed AO evaluation and refresh the AUTOPS board.
+- Measure latency, memory, and rollout throughput on Jetson Orin Nano.
+
+## Future Work
+
+Paper 2 can extend this to CTDE world models for constellation scheduling. Keep that outside the active EventSat repo surface until Paper 1 is stable.

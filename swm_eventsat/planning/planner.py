@@ -6,13 +6,13 @@ from typing import Callable, Dict, Optional, Protocol
 
 import numpy as np
 
-from .linear_probes import DEFAULT_ATTRIBUTE_NAMES
-from .schema import MODE_LIST
+from swm_eventsat.models.probes import DEFAULT_ATTRIBUTE_NAMES
+from swm_eventsat.schema import MODE_LIST
 
 
 class LatentRolloutModel(Protocol):
-    def rollout(self, history: Dict[str, np.ndarray], action11: np.ndarray) -> np.ndarray:
-        """Return latent rollout with shape (N,H,D) for action11 (N,H,11)."""
+    def rollout(self, history: Dict[str, np.ndarray], action: np.ndarray) -> np.ndarray:
+        """Return latent rollout with shape (N,H,D) for action (N,H,7)."""
 
 
 @dataclass
@@ -47,8 +47,8 @@ class CEMPlanner:
         for _ in range(int(self.iterations)):
             seq = self._sample(probs)
             seq = self._apply_first_mask(seq, first_mask)
-            action11 = encode_mode_sequences(seq)
-            z = self.model.rollout(history, action11)
+            action = encode_mode_sequences(seq)
+            z = self.model.rollout(history, action)
             scores = score_latents(z, self.W, self.b, self.mode_weights, seq, self.penalty_fn)
             idx = int(np.argmax(scores))
             if float(scores[idx]) > best_score:
@@ -103,13 +103,11 @@ class CEMPlanner:
         return seq
 
 
-def encode_mode_sequences(seq: np.ndarray, data_priority: int = 0, pipeline_routing: int = 0) -> np.ndarray:
+def encode_mode_sequences(seq: np.ndarray) -> np.ndarray:
     seq = np.asarray(seq, dtype=np.int64)
-    out = np.zeros((*seq.shape, 11), dtype=np.float32)
+    out = np.zeros((*seq.shape, len(MODE_LIST)), dtype=np.float32)
     rows = np.indices(seq.shape)
     out[rows[0], rows[1], seq] = 1.0
-    out[..., 7 + int(bool(data_priority))] = 1.0
-    out[..., 9 + int(bool(pipeline_routing))] = 1.0
     return out
 
 

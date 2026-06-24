@@ -5,20 +5,25 @@ orekit-data.zip
 __pycache__/
 *.py[cod]
 *.egg-info/
+.env
 .venv/
 venv/
+dist/
+build/
 
-# Data, local result boards, and checkpoints
+# Data, local result boards, logs, and checkpoints
 data/cache/
 data/figures/*
 !data/figures/
 !data/figures/index.html
-!data/figures/legacy
 
 legacy/
 checkpoints/
 outputs/
+logs/
 wandb/
+wandb_resume.json
+lightning_logs/
 *.ckpt
 *.pt
 *.npz

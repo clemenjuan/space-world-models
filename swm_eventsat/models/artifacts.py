@@ -13,7 +13,7 @@ class LeWMArtifact:
     obs_normalizer: str
     action_normalizer: str
     obs_dim: int = 25
-    action_dim: int = 11
+    action_dim: int = 7
     embed_dim: int = 128
     history_size: int = 4
     horizon_support: int = 12

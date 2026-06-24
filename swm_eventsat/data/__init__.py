@@ -1,6 +1,6 @@
 """Scheduling data sources and trajectory adapters."""
 
-from swm_eventsat.data.trajectory_schema import (
+from swm_eventsat.schema import (
     EVENTSAT_MODE_LIST,
     EVENTSAT_MODE_TO_INDEX,
     TrajectoryBatch,

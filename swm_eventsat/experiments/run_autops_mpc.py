@@ -1,4 +1,4 @@
-"""AUTOPS bridge CLI for scheduling trajectory export and planner smoke runs."""
+"""AUTOPS bridge CLI for EventSat trajectory export and planner smoke runs."""
 from __future__ import annotations
 
 import argparse
@@ -13,7 +13,7 @@ from swm_eventsat.data.autops_adapter import (
     heuristic_policy,
     make_eventsat_env,
 )
-from swm_eventsat.data.trajectory_schema import EVENTSAT_MODE_LIST
+from swm_eventsat.schema import EVENTSAT_MODE_LIST
 from swm_eventsat.experiments.write_autops_results import write_minimal_results
 
 

@@ -1,2 +1,2 @@
-"""Runnable scheduling experiment entrypoints."""
+"""Runnable EventSat world-model experiment entrypoints."""
 

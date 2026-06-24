@@ -1,0 +1,4 @@
+path: /home/clemente/autops-agentic-framework/data/world_model/eventsat_autops_v1/eventsat_world_model_v1.npz
+window: ${eval:'${history_size} + ${num_preds}'}
+batch_size: 64
+train_split: 0.9

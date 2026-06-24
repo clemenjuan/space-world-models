@@ -42,7 +42,7 @@ def write_minimal_results(
     stats = _stats(rows) if rows else {"mean": {}, "std": {}, "min_val": {}, "max_val": {}}
     payload = {
         "experiment_id": experiment_id,
-        "description": "LeWM-MPC scheduling run exported from space-world-models",
+        "description": "LeWM-MPC EventSat run exported from space-world-models",
         "config": config or {},
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "num_episodes": len(rows),

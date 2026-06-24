@@ -1,9 +1,9 @@
-"""Action masks for EventSat scheduling planners."""
+"""Action masks for EventSat operations planners."""
 from __future__ import annotations
 
 import numpy as np
 
-from swm_eventsat.data.trajectory_schema import EVENTSAT_MODE_TO_INDEX
+from swm_eventsat.schema import EVENTSAT_MODE_TO_INDEX
 
 
 def first_action_mask(env: object, reserve_soc: float = 0.50, allow_unsafe: bool = False) -> np.ndarray:

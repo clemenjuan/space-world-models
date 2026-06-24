@@ -21,8 +21,8 @@ def test_core_and_swm_eventsat_canonical_imports():
     assert EventSatLiteEnv is not None
 
 
-def test_trajectory_schema_roundtrip(tmp_path):
-    from swm_eventsat.data.trajectory_schema import TrajectoryBatch, load_trajectory_npz, save_trajectory_npz
+def test_schema_roundtrip(tmp_path):
+    from swm_eventsat.schema import TrajectoryBatch, load_trajectory_npz, save_trajectory_npz
 
     batch = TrajectoryBatch(
         obs=np.ones((2, 3, 25), dtype=np.float32),

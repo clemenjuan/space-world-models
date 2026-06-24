@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from swm_eventsat.linear_probes import build_attribute_targets, fit_ridge_probe
+from swm_eventsat.models.probes import build_attribute_targets, fit_ridge_probe
 from swm_eventsat.schema import load_world_model_dataset
 
 
