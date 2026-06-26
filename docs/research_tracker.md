@@ -110,6 +110,66 @@ action (15, 10080, 7)
 state  (15, 10080, 25)
 ```
 
+## SSA Constellation Dataset Contract (v1)
+
+The sibling now ships an **SSA** constellation scenario (`configs/scenarios/ssa.yaml`,
+`src/ssa/`): N EventSat-class satellites (`sat_0..sat_{N-1}`) tracking resident
+space objects (RSOs), sharing detections over ISL, and delivering coverage to
+ground. This is the constellation surface for the Paper-2 / CTDE direction and
+the SSA AO **world-model representation cell** (owner-gated in the AUTOPS
+morphological matrix; M-10 scale-efficiency = delivered RSO coverage per
+satellite).
+
+Canonical dataset: `ssa_world_model_v1`. It keeps the EventSat per-satellite
+contract but adds a satellite axis `S` and SSA collective fields.
+
+```text
+obs                 float32 (episode, time, sat, 25)
+action              float32 (episode, time, sat, 8)   one-hot over SSA modes
+state               float32 (episode, time, sat, 25)
+reward              float32 (episode, time, sat)
+mode                int64   (episode, time, sat)
+resolved_mode       int64   (episode, time, sat)
+forced_mode         float32 (episode, time, sat)
+episode_seed        int64   (episode,)
+episode_id          int64   (episode,)
+sat_ids             str     (sat,)
+delivered_coverage  float32 (episode, time)   collective; M-10 numerator
+onboard_coverage    float32 (episode, time)   collective
+archive_records     int64   (episode, time)   delivered-to-ground record count
+```
+
+SSA action is **8D** (note the different ordering from EventSat's 7D — SSA adds
+`isl_share` and reorders):
+
+```text
+0 charging
+1 payload_observe
+2 payload_compress
+3 payload_detect
+4 payload_send
+5 communication
+6 isl_share
+7 safe
+```
+
+`obs`/`state` reuse the 25D EventSat per-satellite encoding (`isl_share`
+collapses to `charging` in the EventSat physical backbone, so the 25D vector
+stays well-defined). The IMAS baseline trains a **shared** world model by
+flattening `(episode, sat)` into the batch axis — each satellite trajectory is an
+independent transition stream. The `sat` axis and collective fields are preserved
+so a later CTDE world model can attend across satellites without re-exporting.
+
+Export (sibling side):
+
+```bash
+cd ~/autops-agentic-framework
+uv run python scripts/export_ssa_world_model_traces.py \
+  configs/experiments/ssa_imas_ao_symb_n3.yaml \
+  --episodes 5 --steps 10080 --seed 42 \
+  --out data/world_model/ssa_v1
+```
+
 ## Method Pipeline
 
 1. Export AUTOPS EventSat traces.

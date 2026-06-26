@@ -60,6 +60,25 @@ REQUIRED_WORLD_MODEL_KEYS = (
     "episode_seed",
 )
 
+# SSA constellation modes (8D, distinct order from the 7D EventSat MODE_LIST;
+# adds isl_share). Mirrors src.ssa.env.SSA_MODES in autops-agentic-framework.
+SSA_MODE_LIST = (
+    "charging",
+    "payload_observe",
+    "payload_compress",
+    "payload_detect",
+    "payload_send",
+    "communication",
+    "isl_share",
+    "safe",
+)
+SSA_MODE_TO_INDEX = {name: idx for idx, name in enumerate(SSA_MODE_LIST)}
+REQUIRED_SSA_WORLD_MODEL_KEYS = REQUIRED_WORLD_MODEL_KEYS + (
+    "delivered_coverage",
+    "onboard_coverage",
+    "archive_records",
+)
+
 
 @dataclass
 class TrajectoryBatch:
@@ -109,6 +128,121 @@ class WorldModelDataset:
     @property
     def dataset_steps(self) -> int:
         return self.n_episodes * self.n_steps
+
+
+@dataclass(frozen=True)
+class SSAWorldModelDataset:
+    """Loaded AUTOPS SSA constellation world-model dataset.
+
+    Per-satellite arrays carry a satellite axis ``S``; ``delivered_coverage`` /
+    ``onboard_coverage`` / ``archive_records`` are collective (per episode-time).
+    """
+
+    path: Path
+    obs: np.ndarray           # (E, T, S, 25)
+    action: np.ndarray        # (E, T, S, 8) one-hot over SSA_MODE_LIST
+    state: np.ndarray         # (E, T, S, 25)
+    reward: np.ndarray        # (E, T, S)
+    mode: np.ndarray          # (E, T, S)
+    resolved_mode: np.ndarray  # (E, T, S)
+    forced_mode: np.ndarray   # (E, T, S)
+    episode_seed: np.ndarray  # (E,)
+    sat_ids: tuple[str, ...]
+    delivered_coverage: np.ndarray  # (E, T)
+    onboard_coverage: np.ndarray    # (E, T)
+    archive_records: np.ndarray     # (E, T)
+    metadata: Dict[str, Any]
+
+    @property
+    def n_episodes(self) -> int:
+        return int(self.obs.shape[0])
+
+    @property
+    def n_steps(self) -> int:
+        return int(self.obs.shape[1])
+
+    @property
+    def n_satellites(self) -> int:
+        return int(self.obs.shape[2])
+
+    def flatten_satellites(self) -> "WorldModelDataset":
+        """Collapse the satellite axis into the episode axis (IMAS shared WM).
+
+        Returns a single-sat-shaped ``WorldModelDataset`` with ``(E*S, T, ·)``
+        per-satellite arrays, so the existing LeWM trainer (which expects
+        ``(episode, time, dim)`` and an 8D action) can consume each satellite
+        trajectory as an independent transition stream.
+        """
+        e, t, s = self.obs.shape[0], self.obs.shape[1], self.obs.shape[2]
+
+        def fold(arr: np.ndarray) -> np.ndarray:
+            # (E, T, S, ...) -> (E, S, T, ...) -> (E*S, T, ...)
+            moved = np.moveaxis(arr, 2, 1)
+            return moved.reshape((e * s,) + moved.shape[2:])
+
+        seed = np.repeat(self.episode_seed, s).astype(np.int64)
+        return WorldModelDataset(
+            path=self.path,
+            obs=fold(self.obs),
+            action=fold(self.action),
+            state=fold(self.state),
+            reward=fold(self.reward),
+            mode=fold(self.mode),
+            resolved_mode=fold(self.resolved_mode),
+            forced_mode=fold(self.forced_mode),
+            episode_seed=seed,
+            metadata={**self.metadata, "flattened_from_ssa": True, "n_satellites": s},
+        )
+
+
+def load_ssa_world_model_dataset(
+    path_like: str | Path, metadata_path: Optional[str | Path] = None
+) -> SSAWorldModelDataset:
+    """Load and validate the AUTOPS SSA constellation world-model dataset."""
+    path = Path(path_like)
+    blob = np.load(path, allow_pickle=False)
+    missing = [key for key in REQUIRED_SSA_WORLD_MODEL_KEYS if key not in blob]
+    if missing:
+        raise ValueError(f"SSA dataset {path} missing required keys: {missing}")
+    obs = blob["obs"].astype(np.float32)
+    action = blob["action"].astype(np.float32)
+    state = blob["state"].astype(np.float32)
+    if obs.ndim != 4 or obs.shape[-1] != 25:
+        raise ValueError(f"obs must be (E,T,S,25), got {obs.shape}")
+    if action.ndim != 4 or action.shape[-1] != len(SSA_MODE_LIST):
+        raise ValueError(f"action must be (E,T,S,{len(SSA_MODE_LIST)}), got {action.shape}")
+    if state.ndim != 4 or state.shape[:3] != obs.shape[:3]:
+        raise ValueError(f"state must be (E,T,S,·) matching obs, got {state.shape}")
+    if obs.shape[:3] != action.shape[:3]:
+        raise ValueError("obs/action episode-time-sat axes must match")
+    onehot = action.sum(axis=-1)
+    if not np.allclose(onehot, 1.0, atol=1e-4):
+        raise ValueError("action must be one-hot over SSA modes")
+    for arr in (obs, action, state):
+        if not np.isfinite(arr).all():
+            raise ValueError("dataset contains non-finite values")
+    sat_ids = tuple(str(x) for x in blob["sat_ids"].tolist()) if "sat_ids" in blob else tuple(
+        f"sat_{i}" for i in range(obs.shape[2])
+    )
+    metadata = (
+        json.loads(Path(metadata_path).read_text(encoding="utf-8")) if metadata_path else load_metadata(path)
+    )
+    return SSAWorldModelDataset(
+        path=path,
+        obs=obs,
+        action=action,
+        state=state,
+        reward=blob["reward"].astype(np.float32),
+        mode=blob["mode"].astype(np.int64),
+        resolved_mode=blob["resolved_mode"].astype(np.int64),
+        forced_mode=blob["forced_mode"].astype(np.float32),
+        episode_seed=blob["episode_seed"].astype(np.int64),
+        sat_ids=sat_ids,
+        delivered_coverage=blob["delivered_coverage"].astype(np.float32),
+        onboard_coverage=blob["onboard_coverage"].astype(np.float32),
+        archive_records=blob["archive_records"].astype(np.int64),
+        metadata=metadata,
+    )
 
 
 def validate_trajectory_arrays(arrays: Mapping[str, np.ndarray]) -> dict[str, Any]:
@@ -239,9 +373,13 @@ __all__ = [
     "EVENTSAT_MODE_TO_INDEX",
     "MODE_LIST",
     "MODE_TO_INDEX",
+    "SSA_MODE_LIST",
+    "SSA_MODE_TO_INDEX",
+    "SSAWorldModelDataset",
     "TrajectoryBatch",
     "WorldModelDataset",
     "load_metadata",
+    "load_ssa_world_model_dataset",
     "load_trajectory_npz",
     "load_world_model_dataset",
     "save_trajectory_npz",

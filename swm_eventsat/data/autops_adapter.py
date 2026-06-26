@@ -37,7 +37,7 @@ def one_hot_mode(index: int, dim: int = len(EVENTSAT_MODE_LIST)) -> np.ndarray:
 
 def observation_to_vector(observation: Any, env: Any) -> np.ndarray:
     """Use AUTOPS' Gymnasium encoder for its canonical 25D EventSat vector."""
-    from src.environment.gymnasium_wrapper import EventSatGymnasium
+    from src.eventsat.gymnasium_wrapper import EventSatGymnasium
 
     wrapper = object.__new__(EventSatGymnasium)
     wrapper._env = env
@@ -94,7 +94,7 @@ def make_eventsat_env(
     **overrides: Any,
 ) -> Any:
     root = ensure_autops_on_path(autops_root)
-    from src.environment.scenarios.eventsat_env import EventSatEnvironment
+    from src.eventsat.env import EventSatEnvironment
 
     config = {
         "constellation_size": 1,
