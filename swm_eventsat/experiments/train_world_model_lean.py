@@ -196,7 +196,7 @@ def main() -> None:
                 **{f"diag/{k}": v for k, v in diag.items()},
             }
             if run:
-                run.log(log)
+                run.log(log, step=step + 1)  # use real optimizer step as W&B x-axis
             print(f"step {step+1:6d}  train_pred={tr['pred_loss']:.4f}  val_pred={va['pred_loss']:.4f}  "
                   f"val_loss={va['loss']:.4f}  eff_rank={diag['eff_rank']:.1f}/{args.embed_dim}  "
                   f"emb_std={diag['emb_std_mean']:.3f}  offdiag={diag['offdiag_corr']:.3f}", flush=True)
