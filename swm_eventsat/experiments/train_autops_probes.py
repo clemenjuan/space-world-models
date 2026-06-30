@@ -58,10 +58,28 @@ def main() -> None:
         "feature_source": str(args.latents) if args.latents else "obs25_smoke_features",
         "attribute_names": fit.attribute_names,
         "rmse": fit.rmse,
+        "rmse_over_std": fit.rmse_over_std,
+        "r2": fit.r2,
+        "degenerate": fit.degenerate,
         "dataset_steps": dataset.dataset_steps,
     }
     out.with_suffix(".json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    print(f"wrote {out} attributes={len(fit.attribute_names)} dataset_steps={dataset.dataset_steps}")
+
+    print(f"\nprobe quality ({manifest['feature_source']}):")
+    print(f"{'attribute':<28}{'rmse_raw':>12}{'rmse/std':>10}{'r2':>8}  verdict")
+    for name in fit.attribute_names:
+        rstd = fit.rmse_over_std.get(name, float("nan"))
+        r2 = fit.r2.get(name, float("nan"))
+        if name in fit.degenerate:
+            verdict = "DEGENERATE (std=0)"
+        elif rstd < 0.35:
+            verdict = "good"
+        elif rstd < 0.5:
+            verdict = "ok"
+        else:
+            verdict = "weak"
+        print(f"{name:<28}{fit.rmse[name]:>12.4f}{rstd:>10.3f}{r2:>8.3f}  {verdict}")
+    print(f"\nwrote {out} attributes={len(fit.attribute_names)} dataset_steps={dataset.dataset_steps}")
 
 
 if __name__ == "__main__":

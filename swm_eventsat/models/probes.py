@@ -1,7 +1,8 @@
 """Linear probes from LeWM latent vectors to mission attributes."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+import warnings
+from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Sequence
 
 import numpy as np
@@ -65,9 +66,15 @@ class ProbeFit:
     W: np.ndarray
     b: np.ndarray
     attribute_names: List[str]
-    rmse: Dict[str, float]
+    rmse: Dict[str, float]  # validation RMSE in RAW target units (scale-dependent)
     target_mean: np.ndarray
     target_std: np.ndarray
+    # Scale-free quality metrics — judge probes by these, not raw rmse.
+    r2: Dict[str, float] = field(default_factory=dict)
+    rmse_over_std: Dict[str, float] = field(default_factory=dict)
+    # Attributes whose target column has ~zero variance: a constant predictor
+    # scores rmse≈0, which is meaningless. Reported as r2=nan, not "perfect".
+    degenerate: List[str] = field(default_factory=list)
 
 
 def _idx(names: Sequence[str]) -> Dict[str, int]:
@@ -119,9 +126,29 @@ def fit_ridge_probe(
     attribute_names: Iterable[str] = DEFAULT_ATTRIBUTE_NAMES,
     ridge: float = 1e-3,
     val_fraction: float = 0.2,
+    seed: int = 0,
 ) -> ProbeFit:
     X, Y = terminal_training_set(latents.astype(np.float32), targets.astype(np.float32))
+    names = list(attribute_names)
+    # Degeneracy is a property of the target itself: near-zero variance over the
+    # whole dataset means there is nothing to predict, so any error metric is moot.
+    y_std_full = Y.std(axis=0)
+    degenerate_mask = y_std_full < 1e-8
+    degenerate = [names[i] for i in range(len(names)) if degenerate_mask[i]]
+    if degenerate:
+        warnings.warn(
+            "degenerate (zero-variance) probe targets, reported as r2=nan: "
+            + ", ".join(degenerate),
+            RuntimeWarning,
+            stacklevel=2,
+        )
     n = X.shape[0]
+    # Shuffle before splitting so the held-out set is distributionally
+    # representative. A contiguous tail split leaves some attributes (e.g. forced
+    # mode flags) near-constant in validation, producing misleading nan/negative
+    # r2 on targets that are perfectly fine globally.
+    perm = np.random.default_rng(seed).permutation(n)
+    X, Y = X[perm], Y[perm]
     split = max(1, int(round(n * (1.0 - val_fraction))))
     split = min(split, n - 1) if n > 1 else n
     Xtr, Ytr = X[:split], Y[:split]
@@ -142,19 +169,43 @@ def fit_ridge_probe(
     bn = coef[-1]
     W = (Wn / x_std).astype(np.float32) * y_std.T
     b = (bn * y_std.reshape(-1) + y_mean.reshape(-1) - (W @ x_mean.reshape(-1))).astype(np.float32)
+    k = Y.shape[-1]
     if Xv.size:
         pred = Xv @ W.T + b
-        err = np.sqrt(np.mean((pred - Yv) ** 2, axis=0))
+        resid = pred - Yv
+        err = np.sqrt(np.mean(resid ** 2, axis=0))
+        ss_res = np.sum(resid ** 2, axis=0)
+        ss_tot = np.sum((Yv - Yv.mean(axis=0, keepdims=True)) ** 2, axis=0)
     else:
-        err = np.zeros(Y.shape[-1], dtype=np.float32)
-    names = list(attribute_names)
+        err = np.zeros(k, dtype=np.float64)
+        ss_res = np.zeros(k, dtype=np.float64)
+        ss_tot = np.zeros(k, dtype=np.float64)
+
+    rmse: Dict[str, float] = {}
+    r2: Dict[str, float] = {}
+    rmse_over_std: Dict[str, float] = {}
+    for i, name in enumerate(names):
+        rmse[name] = float(err[i])
+        if degenerate_mask[i]:
+            rmse_over_std[name] = float("nan")
+        else:
+            rmse_over_std[name] = float(err[i] / y_std_full[i])
+        # r2 also requires the validation partition to carry variance.
+        if degenerate_mask[i] or ss_tot[i] < 1e-12:
+            r2[name] = float("nan")
+        else:
+            r2[name] = float(1.0 - ss_res[i] / ss_tot[i])
+
     return ProbeFit(
         W=W.astype(np.float32),
         b=b.astype(np.float32),
         attribute_names=names,
-        rmse={name: float(err[i]) for i, name in enumerate(names)},
+        rmse=rmse,
         target_mean=y_mean.reshape(-1).astype(np.float32),
         target_std=y_std.reshape(-1).astype(np.float32),
+        r2=r2,
+        rmse_over_std=rmse_over_std,
+        degenerate=degenerate,
     )
 
 

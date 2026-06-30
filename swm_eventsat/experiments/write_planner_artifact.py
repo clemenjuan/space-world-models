@@ -143,10 +143,18 @@ def main() -> None:
             "Train probes with --latents exported from the checkpoint."
         )
     mode_weight_presets = _mode_weight_presets(attribute_names)
-    probe_rmse = probe.get("validation", {}).get("rmse", {})
-    probe_validation_error = (
-        float(np.mean([float(v) for v in probe_rmse.values()])) if probe_rmse else 0.0
-    )
+    validation = probe.get("validation", {})
+    degenerate = set(validation.get("degenerate", []))
+    # Prefer the scale-free metric and skip degenerate (zero-variance) targets so a
+    # constant attribute's fake rmse≈0 cannot deflate the headline error. Fall back
+    # to raw rmse for older manifests that lack rmse_over_std.
+    probe_scores = validation.get("rmse_over_std") or validation.get("rmse", {})
+    usable = [
+        float(v)
+        for name, v in probe_scores.items()
+        if name not in degenerate and np.isfinite(float(v))
+    ]
+    probe_validation_error = float(np.mean(usable)) if usable else 0.0
     model_size_mb = (
         checkpoint_copy.stat().st_size + normalizers_path.stat().st_size + probe_path.stat().st_size
     ) / (1024.0 * 1024.0)

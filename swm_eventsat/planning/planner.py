@@ -134,5 +134,9 @@ def default_mode_weights(mode: str, attribute_names=DEFAULT_ATTRIBUTE_NAMES) -> 
     elif mode == "downlink":
         weights.update(downlink_progress=0.45, storage_margin=0.25, battery_margin=0.15, forced_mode_risk=-0.10)
     else:
-        weights.update(science_progress=0.30, downlink_progress=0.25, battery_margin=0.20, storage_margin=0.15, detection_progress=0.10)
+        # detection_progress is degenerate (zero detections in base-EventSat AO
+        # traces — detection is an SSA concept), so its probe is not trustworthy.
+        # Force its utility weight to 0 and fold the science share it used to carry
+        # into science_progress. Restore if SSA detections enter the dataset.
+        weights.update(science_progress=0.40, downlink_progress=0.25, battery_margin=0.20, storage_margin=0.15)
     return np.asarray([weights[name] for name in attribute_names], dtype=np.float32)
